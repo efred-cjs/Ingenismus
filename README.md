@@ -37,3 +37,5 @@ La arquitectura real de sensores y base de datos todavía se definirá en el sig
 ## Nota
 
 Este prototipo no sustituye evaluación clínica ni realiza diagnósticos. Solo actúa como base técnica para recolección experimental y análisis posterior.
+
+hola soy kmilo probando la nueva rama
