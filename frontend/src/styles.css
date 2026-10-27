@@ -167,6 +167,21 @@ h2 {
   color: var(--muted);
 }
 
+.connection-message,
+.empty-state {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.connection-message {
+  margin: 14px 0 0;
+  color: var(--danger);
+}
+
+.empty-state {
+  margin: 0;
+}
+
 .dot {
   width: 12px;
   height: 12px;
@@ -336,13 +351,19 @@ h2 {
 
 .sensor-list li {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #fafcff;
+}
+
+.sensor-reading {
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
 }
 
 .sensor-list strong,
