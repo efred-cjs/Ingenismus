@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Ingenismus | Graficación</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="ingenismus.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+
+</head>
+
+<body>
+
+    <!-- HEADER -->
+    <header>
+
+        <div class="logo">
+            <!-- Aquí puedes colocar el logotipo -->
+        </div>
+
+        <nav>
+            <a href="#">Inicio</a>
+            <a href="#visualizacion">Visualización</a>
+            <a href="#estadisticas">Estadísticas</a>
+        </nav>
+
+    </header>
+
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="dashboard">
+
+        <!-- ENCABEZADO -->
+        <section class="encabezado">
+
+            <h1>Bienvenido a Ingenismus</h1>
+
+            <p>
+                Sistema de visualización de datos
+                de los sensores MPU6050
+            </p>
+
+        </section>
+
+
+        <!-- CONTROLES -->
+        <section class="controles">
+
+            <div class="campo">
+
+                <label for="sensor">Seleccionar sensor:</label>
+
+                <select id="sensor">
+                    <option value="1">Sensor 1</option>
+                    <option value="2">Sensor 2</option>
+                </select>
+
+            </div>
+
+            <button id="btnConsultar">
+                Actualizar datos
+            </button>
+
+        </section>
+
+
+        <!-- ESTADÍSTICAS -->
+        <section class="estadisticas" id="estadisticas">
+
+            <article class="tarjeta">
+
+                <h3>Total de lecturas</h3>
+
+                <p id="totalLecturas">0</p>
+
+            </article>
+
+
+            <article class="tarjeta">
+
+                <h3>Última lectura</h3>
+
+                <p id="ultimaLectura">Sin datos</p>
+
+            </article>
+
+
+            <article class="tarjeta">
+
+                <h3>Conexión Firebase</h3>
+
+                <p id="estadoConexion">Desconectado</p>
+
+            </article>
+
+        </section>
+
+
+        <!-- VISUALIZACIÓN -->
+        <section id="visualizacion">
+
+            <!-- ACELERÓMETRO -->
+            <div class="grafica">
+
+                <h2>Acelerómetro</h2>
+
+                <p>
+                    Comportamiento de la aceleración
+                    en los ejes X, Y y Z.
+                </p>
+
+                <div class="contenedor-chart">
+
+                    <canvas id="graficaAcelerometro"></canvas>
+
+                </div>
+
+            </div>
+
+
+            <!-- GIROSCOPIO -->
+            <div class="grafica">
+
+                <h2>Giroscopio</h2>
+
+                <p>
+                    Comportamiento del giroscopio
+                    en los ejes X, Y y Z.
+                </p>
+
+                <div class="contenedor-chart">
+
+                    <canvas id="graficaGiroscopio"></canvas>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- FOOTER -->
+    <footer>
+
+        <p>Ingenismus | Sistema de visualización</p>
+
+        <p>Monitoreo de sensores MPU6050</p>
+
+    </footer>
+
+
+    <!-- JAVASCRIPT -->
+    <script type="module" src="ingenismus.js"></script>
+
+</body>
+
+</html>
