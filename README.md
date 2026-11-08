@@ -94,7 +94,9 @@ terminal:
 ```powershell
 .\.venv\Scripts\python.exe backend\simulador_wifi.py
 ```
-
+## Integración de los videos
+En una sección de la interfaz web hay un desplegable el cual a elección del usuario elegira entre un paciente promedio y uno con TEA,
+y se harán las pruebas de ejecución, en cuanto a los videos, se cargan de manera local.
 El simulador envia datos ficticios de los sensores 1 y 2 a la misma API. El ZIP
 original esta conservado en `firmware/archive/`; contiene una implementacion
 anterior con MySQL y no se usa en este flujo Firebase.
