@@ -1,12 +1,6 @@
-# Credenciales y configuracion local
-backend/serviceAccountKey.json
-firmware/config.h
-
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-
-# Frontend
-frontend/node_modules/
+# Credenciales privadas
+serviceAccountKey.json
+*serviceAccountKey*.json
+.env
+.env.*
+!.env.example
