@@ -1,0 +1,731 @@
+
+/* =====================================
+   CONFIGURACIÓN GENERAL
+===================================== */
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+
+    min-height: 100vh;
+
+    background-color: rgb(7, 6, 6);
+
+    font-family: Arial, sans-serif;
+
+    color: white;
+}
+
+
+/* =====================================
+   HEADER
+===================================== */
+
+header {
+    height: 70px;
+
+    display: flex;
+
+    align-items: center;
+
+    background-color: rgb(255, 136, 0);
+
+    position: relative;
+
+    z-index: 1000;
+}
+
+
+/* =====================================
+   LOGO
+===================================== */
+
+.logo {
+    position: absolute;
+
+    left: 30px;
+}
+
+.logo img {
+    width: 80px;
+
+    height: auto;
+}
+
+
+/* =====================================
+   MENÚ DE NAVEGACIÓN
+===================================== */
+
+nav {
+    display: flex;
+
+    align-items: center;
+
+    gap: 30px;
+
+    margin: 0 auto;
+}
+
+nav > a,
+.dropdown-btn {
+
+    color: white;
+
+    text-decoration: none;
+
+    padding: 10px 15px;
+
+    font-size: 16px;
+
+    font-weight: bold;
+
+    position: relative;
+
+}
+
+
+/* Línea inferior */
+
+nav > a::after,
+.dropdown-btn::after {
+
+    content: "";
+
+    position: absolute;
+
+    left: 50%;
+
+    bottom: 0;
+
+    width: 0;
+
+    height: 3px;
+
+    background-color: white;
+
+    transition: 0.3s;
+
+}
+
+
+/* Efecto hover */
+
+nav > a:hover::after,
+.dropdown:hover .dropdown-btn::after {
+
+    width: 100%;
+
+    left: 0;
+
+}
+
+
+/* =====================================
+   MENÚ DESPLEGABLE PRUEBA
+===================================== */
+
+.dropdown {
+
+    position: relative;
+
+}
+
+
+/* Texto PRUEBA */
+
+.dropdown-btn {
+
+    display: block;
+
+    cursor: default;
+
+    user-select: none;
+
+}
+
+
+/* Flecha */
+
+.flecha {
+
+    font-size: 12px;
+
+    margin-left: 4px;
+
+}
+
+
+/* Contenedor del menú */
+
+.dropdown-content {
+
+    display: none;
+
+    position: absolute;
+
+    top: 100%;
+
+    left: 0;
+
+    min-width: 210px;
+
+    background-color: #202020;
+
+    border-radius: 8px;
+
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+
+    overflow: hidden;
+
+    z-index: 1001;
+
+}
+
+
+/* Opciones */
+
+.dropdown-content a {
+
+    display: block;
+
+    padding: 14px 15px;
+
+    color: white;
+
+    text-decoration: none;
+
+    font-size: 14px;
+
+    font-weight: normal;
+
+}
+
+
+/* Hover de opciones */
+
+.dropdown-content a:hover {
+
+    background-color: rgb(255, 136, 0);
+
+}
+
+
+/* Mostrar desplegable */
+
+.dropdown:hover .dropdown-content,
+.dropdown:focus-within .dropdown-content {
+
+    display: block;
+
+}
+
+
+/* =====================================
+   CONTENIDO PRINCIPAL
+===================================== */
+
+.dashboard {
+
+    width: 90%;
+
+    max-width: 1400px;
+
+    margin: auto;
+
+    padding: 40px 0;
+
+}
+
+
+/* =====================================
+   SISTEMA DE PESTAÑAS
+===================================== */
+
+/* Ocultar todas las secciones */
+
+.pagina {
+
+    display: none;
+
+}
+
+
+/* Mostrar únicamente la sección activa */
+
+.pagina.activa {
+
+    display: block;
+
+}
+
+
+/* =====================================
+   ENCABEZADO
+===================================== */
+
+.encabezado {
+
+    text-align: center;
+
+    margin-bottom: 40px;
+
+}
+
+.encabezado h1 {
+
+    margin-bottom: 15px;
+
+    font-size: 36px;
+
+    color: rgb(255, 136, 0);
+
+}
+
+.encabezado p {
+
+    font-size: 17px;
+
+    color: #cccccc;
+
+}
+
+
+/* =====================================
+   CONTROLES
+===================================== */
+
+.controles {
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    gap: 25px;
+
+    margin-bottom: 35px;
+
+}
+
+.campo {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+
+}
+
+.campo label {
+
+    color: white;
+
+    font-weight: bold;
+
+}
+
+
+/* Selector */
+
+.controles select {
+
+    padding: 10px 15px;
+
+    border-radius: 6px;
+
+    border: 1px solid #555;
+
+    background-color: #202020;
+
+    color: white;
+
+    cursor: pointer;
+
+}
+
+
+/* Botón */
+
+.controles button {
+
+    padding: 11px 20px;
+
+    border: none;
+
+    border-radius: 6px;
+
+    background-color: rgb(255, 136, 0);
+
+    color: white;
+
+    font-weight: bold;
+
+    cursor: pointer;
+
+    transition: 0.3s;
+
+}
+
+.controles button:hover {
+
+    background-color: rgb(220, 105, 0);
+
+    transform: translateY(-2px);
+
+}
+
+
+/* =====================================
+   ESTADÍSTICAS
+===================================== */
+
+.estadisticas {
+
+    display: grid;
+
+    grid-template-columns: repeat(3, 1fr);
+
+    gap: 20px;
+
+    margin-bottom: 40px;
+
+}
+
+
+/* Tarjetas */
+
+.tarjeta {
+
+    background-color: #202020;
+
+    padding: 25px;
+
+    text-align: center;
+
+    border-radius: 12px;
+
+    border-bottom: 3px solid rgb(255, 136, 0);
+
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+
+    transition: 0.3s;
+
+}
+
+.tarjeta:hover {
+
+    transform: translateY(-4px);
+
+}
+
+.tarjeta h3 {
+
+    font-size: 17px;
+
+    color: white;
+
+}
+
+.tarjeta p {
+
+    font-size: 24px;
+
+    font-weight: bold;
+
+    color: white;
+
+}
+
+
+/* =====================================
+   VISUALIZACIÓN DE GRÁFICAS
+===================================== */
+
+#visualizacion {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 30px;
+
+}
+
+
+/* Contenedores */
+
+.grafica {
+
+    width: 100%;
+
+    background-color: #202020;
+
+    padding: 25px;
+
+    border-radius: 12px;
+
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+
+}
+
+
+/* Títulos */
+
+.grafica h2 {
+
+    margin-top: 15px;
+
+    color: rgb(255, 136, 0);
+
+    font-size: 23px;
+
+}
+
+.grafica > p {
+
+    color: #cccccc;
+
+    font-size: 14px;
+
+}
+
+
+/* Canvas */
+
+.contenedor-chart {
+
+    position: relative;
+
+    width: 100%;
+
+    height: 350px;
+
+    margin-top: 20px;
+
+}
+
+
+/* =====================================
+   SECCIONES DE PRUEBAS
+===================================== */
+
+.seccion-prueba {
+
+    width: 100%;
+
+    background-color: #202020;
+
+    padding: 25px;
+
+    margin-bottom: 30px;
+
+    border-radius: 12px;
+
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+
+}
+
+
+/* Títulos */
+
+.seccion-prueba h2 {
+
+    margin-top: 15px;
+
+    color: rgb(255, 136, 0);
+
+    font-size: 23px;
+
+}
+
+
+/* Descripciones */
+
+.seccion-prueba p {
+
+    color: #cccccc;
+
+    font-size: 14px;
+
+}
+
+
+/* =====================================
+   REPRODUCTORES DE VIDEO
+===================================== */
+
+.contenedor-video {
+
+    position: relative;
+
+    width: 100%;
+
+    max-width: 1000px;
+
+    height: 450px;
+
+    margin: 25px auto 0;
+
+    background-color: #080808;
+
+    border: 2px dashed rgb(255, 136, 0);
+
+    border-radius: 12px;
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    overflow: hidden;
+
+}
+
+
+/* Video */
+
+.contenedor-video video {
+
+    width: 100%;
+
+    height: 100%;
+
+    object-fit: contain;
+
+}
+
+
+/* =====================================
+   FOOTER
+===================================== */
+
+footer {
+
+    min-height: 100px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    justify-content: center;
+
+    align-items: center;
+
+    background-color: rgba(7, 0, 0, 0.9);
+
+    color: #cccccc;
+
+    font-size: 13px;
+
+    text-align: center;
+
+}
+
+
+/* =====================================
+   RESPONSIVE
+===================================== */
+
+@media (max-width: 768px) {
+
+    .dashboard {
+
+        width: 94%;
+
+    }
+
+    header {
+
+        height: auto;
+
+        min-height: 70px;
+
+    }
+
+    nav {
+
+        gap: 5px;
+
+    }
+
+    nav > a,
+    .dropdown-btn {
+
+        padding: 10px;
+
+        font-size: 13px;
+
+    }
+
+    .dropdown-content {
+
+        left: auto;
+
+        right: 0;
+
+        min-width: 180px;
+
+    }
+
+    .estadisticas {
+
+        grid-template-columns: 1fr;
+
+    }
+
+    .controles {
+
+        flex-direction: column;
+
+    }
+
+    .campo {
+
+        flex-wrap: wrap;
+
+        justify-content: center;
+
+    }
+
+    .encabezado h1 {
+
+        font-size: 27px;
+
+    }
+
+    .contenedor-chart {
+
+        height: 280px;
+
+    }
+
+    .grafica {
+
+        padding: 15px;
+
+    }
+
+    .seccion-prueba {
+
+        padding: 15px;
+
+    }
+
+    .contenedor-video {
+
+        height: 280px;
+
+    }
+
+}

@@ -1,0 +1,473 @@
+DOCUMENTACIÓN ACTUALIZADA — ESP32 + 2 MPU6050 + PYTHON + FIREBASE
+Actualización: 20 de octubre de 2026
+
+============================================================
+1. OBJETIVO Y ESTADO ACTUAL
+============================================================
+
+El proyecto registra lecturas de dos sensores MPU6050 conectados a un ESP32.
+Los datos se reciben por Wi-Fi mediante un servidor Python (Flask) y se guardan
+en Firebase Realtime Database.
+
+La arquitectura configurada es:
+
+ESP32 + MPU6050 n.º 1 y n.º 2
+        |
+        | HTTP / JSON por Wi-Fi
+        v
+PC con Python + Flask (puerto 5000)
+        |
+        | Firebase Admin SDK + Internet
+        v
+Firebase Realtime Database, nodo "mediciones"
+
+El ESP32 NO se conecta directamente a Firebase en esta arquitectura. Python
+funciona como intermediario entre el ESP32 y Firebase.
+
+Estado confirmado durante la configuración:
+- Se instaló la biblioteca firebase-admin en Python.
+- Se configuró una URL de Realtime Database.
+- Se colocó la credencial JSON de Firebase en la carpeta del proyecto y se
+  configuró el servidor para buscarla como serviceAccountKey.json.
+- El servidor 03_servidor_wifi_firebase.py inició correctamente después de
+  resolver el problema de ubicación/nombre de la credencial.
+- La prueba con datos simulados produjo un registro visible en Firebase bajo
+  el nodo "mediciones".
+- En la captura de prueba aparecieron campos como sensor_id, aceleracion_x,
+  aceleracion_y, aceleracion_z, giroscopio_x, giroscopio_y, giroscopio_z y
+  fecha_servidor.
+- Aún falta confirmar la prueba con el ESP32 físico y ambos sensores.
+- La recepción por USB como respaldo debe verificarse por separado. No se debe
+  asumir que el receptor USB original ya guarda en Firebase.
+
+============================================================
+2. ARCHIVOS DEL PROYECTO
+============================================================
+
+Archivos vistos en la carpeta de trabajo:
+
+- 01_crear_base_datos.sql
+  Archivo heredado de la versión anterior que utilizaba MySQL. No es necesario
+  para el flujo actual de Firebase por Wi-Fi.
+
+- 01_ESP32_MPU6050_WIFI.ino
+  Firmware Arduino/ESP32 mostrado en la carpeta actual. Es el programa que se
+  debe revisar y cargar para la prueba física. El nombre puede diferir del
+  nombre que tenía el firmware original.
+
+- 03_servidor_wifi_firebase.py
+  Versión adaptada para recibir POST HTTP y guardar las mediciones en Firebase.
+
+- 03_servidor_wifi.py
+  Archivo original de la versión anterior. Conservarlo como respaldo; no
+  ejecutar este archivo para la prueba de Firebase si todavía está configurado
+  para MySQL.
+
+- 04_simulador_wifi.py
+  Simula el envío de mediciones para comprobar el servidor sin utilizar todavía
+  los sensores físicos.
+
+- requirements.txt
+  Lista de dependencias del proyecto. Debe revisarse para que incluya las
+  dependencias que realmente se utilizan.
+
+- serviceAccountKey.json
+  Credencial privada que el servidor Firebase busca junto al archivo Python.
+  Si la descarga de Firebase tiene un nombre largo, se debe renombrar
+  exactamente a serviceAccountKey.json. Verificar que Windows no haya dejado
+  el nombre como serviceAccountKey.json.json.
+
+No compartir serviceAccountKey.json ni subirlo a repositorios públicos. No
+copiar su contenido en mensajes, capturas o documentación compartida.
+
+============================================================
+3. CONFIGURAR FIREBASE
+============================================================
+
+1. Abrir https://console.firebase.google.com/ e iniciar sesión.
+2. Crear o abrir el proyecto de Firebase.
+3. Entrar a Compilación (Build) > Realtime Database.
+4. Crear la base de datos y seleccionar una ubicación.
+5. Para el prototipo, mantener reglas seguras/bloqueadas y utilizar la cuenta
+   de servicio desde el servidor Python. No abrir la base de datos al público.
+6. Copiar la URL que muestra Realtime Database. En este proyecto la URL
+   configurada fue:
+
+   https://mediciones-9afdd-default-rtdb.firebaseio.com
+
+7. Para obtener la credencial, ir a Configuración del proyecto > Cuentas de
+   servicio > Generar nueva clave privada. Guardar el archivo JSON en la misma
+   carpeta que 03_servidor_wifi_firebase.py y renombrarlo a
+   serviceAccountKey.json.
+
+La URL de la base de datos y el archivo JSON son cosas diferentes:
+- La URL indica a qué base de datos se conecta Python.
+- El JSON autentica al servidor Python.
+
+Firebase Realtime Database organiza los datos como JSON, no como tablas SQL.
+Los registros de este proyecto se guardan en el nodo "mediciones". Se pueden
+consultar desde Firebase Console; para una vista tabular se puede usar Python
+con pandas o crear un dashboard, pero eso es una tarea separada.
+
+============================================================
+4. INSTALAR LAS DEPENDENCIAS DE PYTHON Y FIREBASE
+============================================================
+
+Esta instalación se hace una vez por cada entorno de Python que se vaya a usar.
+No se escribe dentro del código .py ni en Arduino IDE: los comandos se ejecutan
+ en la terminal de VS Code.
+
+PASO 1. Abrir la terminal
+- Abrir VS Code con la carpeta del proyecto.
+- Seleccionar Terminal > Nueva terminal.
+- En este equipo, el comando "python" inicialmente no se encontró desde
+  PowerShell, pero el lanzador "py" sí funcionó. Por eso se utiliza "py".
+
+PASO 2. Comprobar Python y pip
+
+   py --version
+   py -m pip --version
+
+Si ambos comandos muestran versiones, continuar.
+
+PASO 3. Instalar las bibliotecas necesarias
+
+   py -m pip install flask firebase-admin requests
+
+Para qué sirve cada dependencia:
+- flask: crea el servidor HTTP local que recibe las solicitudes del ESP32.
+- firebase-admin: permite que Python se autentique con la cuenta de servicio
+  y escriba registros en Firebase Realtime Database.
+- requests: permite que el simulador u otros scripts envíen solicitudes HTTP.
+
+El comando "py -m pip" ejecuta pip con el Python seleccionado por el lanzador
+"py". No se ejecuta dentro de 03_servidor_wifi_firebase.py.
+
+PASO 4. Alternativa: instalar desde requirements.txt
+
+Si requirements.txt incluye las dependencias que utiliza esta versión del
+proyecto, ejecutar:
+
+   py -m pip install -r requirements.txt
+
+Si el archivo requirements.txt no incluye Flask, Firebase Admin o requests,
+instalarlas con el comando del PASO 3. No es necesario ejecutar ambos métodos
+si todas las dependencias ya quedaron instaladas.
+
+PASO 5. Confirmar la instalación
+
+   py -m pip show flask
+   py -m pip show firebase-admin
+   py -m pip show requests
+
+Cada comando debe mostrar información del paquete instalado. Si aparece un
+mensaje de paquete no encontrado, repetir la instalación del PASO 3 y revisar
+si se está usando el mismo entorno de Python en el que se ejecuta el servidor.
+
+IMPORTANTE:
+- Ejecutar la instalación con Internet disponible.
+- No pegar la clave privada JSON en la terminal ni en el código.
+- Instalar las bibliotecas no configura por sí solo Firebase: también se
+  necesitan la URL real de Realtime Database y el archivo serviceAccountKey.json.
+
+============================================================
+5. CONFIGURAR EL SERVIDOR PYTHON PARA FIREBASE
+============================================================
+
+Abrir 03_servidor_wifi_firebase.py. Las líneas principales deben ser similares
+a las siguientes:
+
+   FIREBASE_DATABASE_URL = "https://mediciones-9afdd-default-rtdb.firebaseio.com"
+   SERVICE_ACCOUNT_FILE = Path(__file__).with_name("serviceAccountKey.json")
+   HTTP_PORT = 5000
+   HTTP_HOST = "0.0.0.0"
+
+Significado:
+- FIREBASE_DATABASE_URL: URL real de Realtime Database.
+- SERVICE_ACCOUNT_FILE: busca serviceAccountKey.json junto al servidor.
+- HTTP_PORT: puerto 5000 para la API HTTP local.
+- HTTP_HOST = "0.0.0.0": permite que otros dispositivos de la red local
+  alcancen el servidor, sujeto a la configuración del firewall.
+
+Guardar el archivo con Ctrl+S.
+
+Para iniciar el servidor, desde la terminal ubicada en la carpeta del proyecto:
+
+   py 03_servidor_wifi_firebase.py
+
+Dejar la terminal abierta mientras se realizan las pruebas. Si se cierra la
+terminal o se detiene el proceso, el servidor deja de recibir las mediciones.
+
+La primera vez puede aparecer una solicitud del Firewall de Windows. Permitir
+el acceso solo en redes privadas confiables si se necesita recibir datos desde
+el ESP32. No exponer esta API sin autenticación a Internet.
+
+Comprobación local: abrir en el navegador:
+
+   http://127.0.0.1:5000/
+
+Debe responder un JSON indicando que el servidor está activo y que el endpoint
+de recepción es /mediciones.
+
+El servidor recibe los datos en:
+
+   POST http://IP_DE_LA_PC:5000/mediciones
+
+y los guarda con una operación equivalente a:
+
+   referencia = db.reference("mediciones")
+   referencia.push(registro)
+
+Cada registro recibe una clave única de Firebase y una marca de tiempo del
+servidor.
+
+============================================================
+6. PRUEBA CON SIMULADOR (YA SE COMPROBÓ QUE GUARDA EN FIREBASE)
+============================================================
+
+Esta prueba verifica la ruta Python -> Firebase sin depender de los sensores.
+
+1. Iniciar el servidor:
+
+   py 03_servidor_wifi_firebase.py
+
+2. Dejar esa terminal abierta.
+3. Abrir una segunda terminal en la carpeta del proyecto.
+4. Ejecutar:
+
+   py 04_simulador_wifi.py
+
+5. Abrir Firebase Console > Realtime Database > Datos.
+6. Revisar el nodo "mediciones".
+
+En una prueba confirmada se vio un registro con:
+- sensor_id: 1
+- aceleracion_x, aceleracion_y y aceleracion_z
+- giroscopio_x, giroscopio_y y giroscopio_z
+- fecha_servidor
+
+Esto demuestra que la API recibió al menos una medición simulada y Firebase
+la guardó. No demuestra todavía que los sensores físicos estén funcionando.
+
+Si el simulador falla, revisar el mensaje que aparece en su terminal. El
+simulador debe apuntar al servidor local en el puerto 5000 y enviar los campos
+que el endpoint /mediciones espera.
+
+============================================================
+7. PREPARAR EL FIRMWARE PARA LA PRUEBA FÍSICA POR WI-FI
+============================================================
+
+Abrir el archivo .ino que se vaya a cargar en Arduino IDE. Localizar las
+variables de configuración:
+
+   const char* WIFI_SSID = "NOMBRE_DE_TU_WIFI";
+   const char* WIFI_PASSWORD = "CONTRASENA_DE_TU_WIFI";
+   const char* API_URL = "http://192.168.1.50:5000/mediciones";
+
+Reemplazar los valores de ejemplo:
+
+A. WIFI_SSID:
+   Escribir el nombre exacto de la red Wi-Fi a la que se conectará el ESP32.
+
+B. WIFI_PASSWORD:
+   Escribir la contraseña de esa red. No ponerla en documentación compartida.
+
+C. API_URL:
+   Cambiar 192.168.1.50 por la IPv4 actual de la computadora donde se ejecuta
+   Flask. Mantener el puerto 5000 y la ruta /mediciones.
+
+Para conocer la IP en Windows, abrir PowerShell y ejecutar:
+
+   ipconfig
+
+Buscar la Dirección IPv4 del adaptador conectado a la misma red que usará el
+ESP32. Ejemplo ilustrativo: si la IP de la PC fuera 192.168.0.105, la URL sería:
+
+   http://192.168.0.105:5000/mediciones
+
+La IP de ejemplo NO debe copiarse si no coincide con la IP real del equipo.
+
+No usar localhost ni 127.0.0.1 en API_URL: desde el ESP32 esas direcciones
+apuntarían al propio dispositivo y no a la computadora.
+
+Guardar el archivo con Ctrl+S. En Arduino IDE:
+1. Seleccionar la placa ESP32 correcta.
+2. Seleccionar el puerto COM correspondiente.
+3. Compilar y cargar el firmware.
+4. Abrir el Monitor Serie a la velocidad configurada en el código (en la
+   configuración anterior se sugirió 115200 baudios; confirmar el valor real
+   en el firmware).
+
+La estructura JSON que envía el firmware debe coincidir con los campos que
+valida 03_servidor_wifi_firebase.py. El servidor adaptado espera estos campos:
+- sensor_id
+- aceleracion_x
+- aceleracion_y
+- aceleracion_z
+- giroscopio_x
+- giroscopio_y
+- giroscopio_z
+
+Antes de la prueba física, confirmar en el código .ino que usa esos nombres y
+que sensor_id toma valores 1 y 2. Si el firmware usa otros nombres, el
+servidor o el firmware tendrán que adaptarse para coincidir.
+
+============================================================
+8. PROCEDIMIENTO DE PRUEBA FÍSICA POR WI-FI
+============================================================
+
+1. Conectar la PC a la red Wi-Fi.
+2. Obtener la IPv4 actual de la PC mediante ipconfig.
+3. Configurar WIFI_SSID, WIFI_PASSWORD y API_URL en el .ino.
+4. Guardar y cargar el programa al ESP32.
+5. Ejecutar en VS Code:
+
+   py 03_servidor_wifi_firebase.py
+
+6. Dejar el servidor ejecutándose.
+7. Conectar/encender el ESP32 con los dos MPU6050 conectados según el cableado
+   ya establecido.
+8. Observar el Monitor Serie y confirmar conexión Wi-Fi y respuestas HTTP.
+9. Abrir Firebase Console > Realtime Database > Datos.
+10. Revisar si aparecen nuevas claves bajo "mediciones" y comprobar que
+    sensor_id identifica ambos sensores.
+11. Mover los sensores y verificar que las lecturas cambien.
+
+Requisitos:
+- La PC y el ESP32 deben estar en la misma red local.
+- La red debe permitir que el ESP32 alcance el puerto TCP 5000 de la PC.
+- La PC necesita Internet para que Python pueda escribir en Firebase.
+- La consola de Firebase no necesita permanecer abierta para recibir datos;
+  solo se usa para inspeccionarlos.
+- El servidor Python sí debe permanecer ejecutándose en esta arquitectura.
+
+La prueba física todavía queda pendiente hasta que se observen lecturas nuevas
+procedentes del ESP32 real. No considerar datos del simulador como evidencia de
+que el hardware ya funciona.
+
+============================================================
+9. USB COMO RESPALDO
+============================================================
+
+El proyecto original contempla un modo de respaldo por USB si falla Wi-Fi/API.
+Sin embargo, el receptor USB original 02_receptor_usb.py pertenecía a la versión
+MySQL.
+
+Para usar Firebase también por USB, se debe adaptar o revisar ese receptor para
+que:
+1. Lea las líneas serie que envía el firmware.
+2. Analice el formato de los datos.
+3. Convierta cada lectura a los campos esperados.
+4. Escriba los registros en Firebase usando Firebase Admin SDK.
+5. No dependa de MySQL/XAMPP.
+
+No ejecutar el receptor USB original suponiendo que ya guarda en Firebase.
+La ruta USB hacia Firebase está pendiente de adaptación/verificación.
+
+Si el firmware envía por USB, normalmente se debe cerrar el Monitor Serie antes
+de ejecutar otro programa que necesite abrir el mismo puerto COM, porque el
+puerto serie suele poder estar ocupado por una sola aplicación a la vez.
+
+============================================================
+10. CÓMO VER LOS DATOS Y ENTENDER LOS RESULTADOS
+============================================================
+
+En Firebase Console > Realtime Database > Datos, los registros aparecen como
+objetos JSON con claves únicas, no como filas SQL.
+
+Ejemplo conceptual:
+
+mediciones
+  └── clave_generada_por_firebase
+      ├── sensor_id: 1
+      ├── aceleracion_x: 561
+      ├── aceleracion_y: -706
+      ├── aceleracion_z: 14069
+      ├── giroscopio_x: -246
+      ├── giroscopio_y: -123
+      ├── giroscopio_z: -230
+      └── fecha_servidor: marca de tiempo
+
+Los valores anteriores corresponden a una captura de prueba y no deben
+interpretarse como lecturas actuales de los sensores físicos.
+
+Para visualizar registros en forma tabular se puede desarrollar posteriormente
+un visor con Python/pandas o un dashboard web. Eso no cambia el almacenamiento
+en Firebase.
+
+============================================================
+11. SOLUCIÓN DE PROBLEMAS
+============================================================
+
+A. Error: no se encontró serviceAccountKey.json
+   - Comprobar que el archivo JSON esté junto a 03_servidor_wifi_firebase.py.
+   - El nombre debe ser exactamente serviceAccountKey.json.
+   - Revisar que Windows no haya añadido .json dos veces.
+   - No compartir el contenido del archivo.
+
+B. El servidor no inicia por URL sin configurar
+   - Revisar FIREBASE_DATABASE_URL y pegar la URL real de Realtime Database.
+
+C. El servidor inicia pero Firebase devuelve error al escribir
+   - Verificar que la URL corresponda al proyecto correcto.
+   - Comprobar que el JSON de credenciales pertenece a ese mismo proyecto.
+   - Revisar conexión a Internet y el error de la terminal del servidor.
+   - Mantener las reglas seguras; no resolverlo abriendo la base al público.
+
+D. El ESP32 no alcanza al servidor
+   - Revisar WIFI_SSID y WIFI_PASSWORD.
+   - Ejecutar ipconfig y actualizar API_URL con la IPv4 actual de la PC.
+   - Confirmar que PC y ESP32 estén en la misma red.
+   - Revisar el Firewall de Windows para permitir TCP 5000 en la red privada.
+   - No usar localhost ni 127.0.0.1 en API_URL.
+
+E. El servidor responde 400 / faltan campos
+   - El JSON del ESP32 no coincide con los campos requeridos.
+   - Comparar el .ino con la lista de campos de la sección 7.
+
+F. Firebase solo muestra datos del sensor 1
+   - Confirmar que el firmware esté enviando también sensor_id = 2.
+   - Revisar el Monitor Serie y los registros nuevos.
+   - No asumir que el segundo sensor funciona hasta ver sus registros.
+
+G. No aparecen datos por USB
+   - El receptor USB para Firebase aún debe adaptarse/verificarse.
+   - Cerrar el Monitor Serie antes de abrir el puerto COM desde el receptor.
+   - Confirmar que el cable USB permita datos, no solo carga.
+
+============================================================
+12. SEGURIDAD Y COSTOS
+============================================================
+
+- Mantener Firebase Realtime Database con reglas seguras.
+- No publicar serviceAccountKey.json ni incluirlo en Git.
+- No exponer el servidor Flask sin autenticación a Internet.
+- No compartir contraseñas Wi-Fi ni credenciales privadas.
+- Firebase ofrece un plan gratuito con límites de uso; revisar el plan y el
+  consumo en la consola. No activar un plan de pago sin comprender sus cargos.
+- Mantener la clave privada fuera de capturas y documentación que se entregue.
+
+============================================================
+13. RESUMEN DE LO REALIZADO Y LO PENDIENTE
+============================================================
+
+REALIZADO:
+[✓] Instalación de firebase-admin mediante la terminal de VS Code.
+[✓] Creación/configuración de Firebase Realtime Database.
+[✓] Configuración de la URL de la base de datos.
+[✓] Colocación/configuración de la credencial JSON para Python.
+[✓] Adaptación de 03_servidor_wifi.py a 03_servidor_wifi_firebase.py.
+[✓] Inicio correcto del servidor Firebase después de resolver la credencial.
+[✓] Prueba del servidor con datos simulados.
+[✓] Confirmación visual de un registro en Firebase bajo "mediciones".
+
+PENDIENTE:
+[ ] Revisar que el firmware .ino envíe exactamente los campos esperados.
+[ ] Configurar el SSID y contraseña Wi-Fi en el firmware local.
+[ ] Configurar API_URL con la IPv4 actual de la PC.
+[ ] Cargar el firmware al ESP32 físico.
+[ ] Confirmar lecturas reales de ambos MPU6050 en Firebase.
+[ ] Adaptar/verificar el receptor USB para guardar en Firebase.
+[ ] Opcional: crear tabla o dashboard para visualizar las mediciones.
+
+FIN DE LA DOCUMENTACIÓN

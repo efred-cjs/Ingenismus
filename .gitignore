@@ -1,0 +1,14 @@
+# Credenciales privadas
+serviceAccountKey.json
+*serviceAccountKey*.json
+.env
+.env.*
+!.env.example
+
+# Entornos y artefactos generados
+.venv/
+__pycache__/
+*.py[cod]
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
