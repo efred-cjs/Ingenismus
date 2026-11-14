@@ -1,248 +1,213 @@
-DOCUMENTACION TECNICA - INGENISMUS BD 2.0
+INGENISMUS BD 2.0 - ARQUITECTURA CONSOLIDADA
 Actualizacion: 11 de noviembre de 2026
 
-1. ARQUITECTURA GENERAL
-=======================
-
-Flujo de lecturas:
-
-  MPU6050 x 2 -> ESP32 -> HTTP/JSON por Wi-Fi -> API Flask -> Firebase
-                                                    ^             |
-                                                    |             v
-                                  React/Vite <- GET /mediciones <-+
-
-El ESP32 lee dos MPU6050 a traves de buses I2C independientes y manda una
-solicitud POST por cada sensor. Flask valida el esquema, agrega fecha_servidor
-con el timestamp de Firebase y escribe en el nodo Realtime Database
-"mediciones". React consulta Flask cada dos segundos. El navegador no se
-conecta directamente a Firebase; esto mantiene la credencial de servicio
-exclusivamente en el backend.
-
-2. ESTRUCTURA FINAL Y ARCHIVOS IMPORTANTES
-==========================================
+1. ESTRUCTURA
+==============
 
 backend/
-  servidor_firebase.py       API Flask activa: estado, GET y POST /mediciones.
-  simulador_wifi.py          Emite datos ficticios a la API para pruebas.
-  requirements.txt           Flask y Firebase Admin SDK.
+  servidor_firebase.py       API Flask, validacion, sesiones, modo y Firebase.
+  simulador_wifi.py          Generador de lecturas ficticias enviadas a la API.
+  requirements.txt           Dependencias del backend activo.
 
 frontend/
-  index.html                 Documento raiz de Vite.
-  package.json               Scripts y dependencias React/Vite.
-  vite.config.js             Servidor Vite y proxy /api al backend Flask.
-  public/videos/             Copias web de los dos videos de prueba.
-  src/main.jsx               Monta React y estilos.
-  src/App.jsx                Navegacion, estados, tablas, paginas y consulta.
-  src/components/GraficaLecturas.jsx  Graficas SVG de acelerometro/giroscopio.
-  src/services/mediciones.js Cliente HTTP de GET /mediciones.
-  src/styles.css             Estilos y paleta de Ingenismus.
-  src/prueba.html            Archivo previo conservado; el punto de entrada
-                             activo es index.html -> src/main.jsx.
-  .env.example               Ejemplo del destino de proxy Vite.
+  index.html                 Entrada de Vite.
+  src/ingenismus.js          Montaje de React; reemplaza ingenismus.js antiguo.
+  src/ingenismus.css         Estilos consolidados; reemplaza ingenismus.css antiguo.
+  src/App.jsx                Navegacion, panel, sesion, fuente y vistas.
+  src/services/mediciones.js Cliente API compartido para el snapshot y acciones.
+  src/components/GraficaLecturas.jsx Graficas SVG desde registros del panel.
+  public/videos/CaricaturaPruebas.mp4  Video compartido por las dos pruebas.
+  package.json, vite.config.js, .env.example
 
-01_ESP32_MPU6050_WIFI/
-  03_servidor_wifi_firebase.py  Version de referencia actualizada de Firebase.
-  03_servidor_wifi.py           Servidor MySQL heredado; no es el activo.
-  04_simulador_wifi.py          Simulador de referencia.
-  01_ESP32_MPU6050_WIFI.ino     Firmware de referencia sin secretos locales.
-  requirements.txt              Lista heredada, no usar para instalar el backend
-                                Firebase actual (carece de firebase-admin).
+firmware/ESP32_MPU6050_WIFI/ESP32_MPU6050_WIFI.ino
+                             Firmware activo de dos MPU6050 por Wi-Fi.
+firmware/archive/            Versiones anteriores y respaldos previos a la
+                             consolidacion.
+DOCUMENTACION_TECNICA_INGENISMUS.txt
+README.md
 
-firmware/ESP32_MPU6050_WIFI/
-  ESP32_MPU6050_WIFI.ino     Firmware principal para cargar en el ESP32.
-firmware/archive/            ZIP y archivos anteriores conservados.
-Web_interface/               Interfaz HTML/CSS/JS original conservada como
-                             referencia. Sus funciones estan integradas en React.
-videos/                      Videos originales; los activos web son copias en
-                             frontend/public/videos/.
-.env.example                 Ejemplo de variables del backend y proxy.
-README.md                    Inicio rapido.
+El directorio citado en la solicitud como 01_ESP32MPU6050_WIFI existia con el
+nombre 01_ESP32_MPU6050_WIFI. Sus fuentes se respaldaron en
+firmware/archive/consolidacion_2026-11-11.zip antes de retirar el directorio.
+Web_interface tambien se respaldo en ese ZIP. El antiguo HTML de prueba que
+estaba en frontend/src/prueba.html esta en firmware/archive/prueba_html_anterior.zip.
 
-No se eliminaron archivos. La carpeta 01_ESP32_MPU6050_WIFI tiene guiones
-bajos entre ESP32 y MPU6050; es el nombre presente en este repositorio.
+2. CONSOLIDACION DEL FRONTEND
+=============================
 
-3. FUNCIONAMIENTO DEL FRONTEND
-==============================
+La aplicacion activa es React/Vite y se inicia con npm run dev. Antes de esta
+etapa el prototipo de Web_interface (prueba.html, ingenismus.css y
+ingenismus.js) accedia Firebase directamente desde el navegador y mantenia
+su propio ciclo de lectura y graficas Chart.js. Se retiro esa interfaz
+duplicada: sus funciones utiles (seleccion de sensor, consulta, conteo,
+ultima lectura y graficas de acelerometro/giroscopio) estan resueltas por
+frontend/src/App.jsx, frontend/src/services/mediciones.js y
+frontend/src/components/GraficaLecturas.jsx, con el mismo snapshot de API.
 
-El comando npm run dev sigue siendo el punto unico de inicio. La navegacion
-React integra Inicio, Visualizacion, Estadisticas, Resultados, Recoleccion,
-Configuracion y el menu Prueba (Pacientes promedio / Pacientes con TEA).
-Las graficas representan hasta 300 registros consultados desde la API y se
-actualizan con el sondeo de dos segundos. La tabla muestra la fecha del
-servidor y las seis medidas de cada lectura. Los videos usan copias locales en
-frontend/public/videos para que Vite los sirva sin abrir HTML independiente.
+ingenismus.css y ingenismus.js quedaron integrados bajo esos nombres en
+frontend/src. El HTML de prueba anterior en frontend/src/prueba.html era una
+copia independiente que apuntaba a recursos ausentes en ese directorio; no
+contenia funciones adicionales. Se retiro tras respaldarlo. No se carga HTML
+externo ni se accede a Firebase desde el navegador.
 
-El indicador Firebase se marca conectado solo cuando GET /mediciones responde
-con firebase="conectado". El estado reciente del ESP32 se calcula a partir de
-timestamps de los registros y un umbral de diez segundos. Las tarjetas de
-participantes y sesiones que ya aparecian en el dashboard son datos estaticos
-de demostracion; no existe en este repositorio una API de pacientes/sesiones.
-La interfaz los identifica como demostracion y no los mezcla con lecturas
-reales.
+Componentes visuales repetidos que se resolvieron:
+- Se quitaron participantes y sesiones estaticos que no procedian del backend.
+- Un unico estado de API/Firebase, modo y sesion alimenta Inicio, Estadisticas,
+  Visualizacion, Resultados y Recoleccion.
+- La tabla de lecturas se comparte entre Visualizacion y Resultados; cambia
+  solo el filtro (sensor o sesion) y no consulta otra fuente.
+- Vision artificial se muestra como No configurada; no existe servicio de
+  vision en este repositorio y no se presenta como activo.
 
-Paleta aplicada: marino #001A41, cian #00B4FB, naranja #FF8422, coral #FA6560
-y verde #436C34. La grafica se implementa en SVG, sin agregar dependencias
-para Chart.js; conserva las tres series X/Y/Z, leyenda, hora y actualizacion.
+3. FLUJO DE DATOS Y CONTRATO
+============================
 
-4. COMO INICIAR EL FRONTEND
+ESP32 o backend/simulador_wifi.py
+  -> POST /mediciones en Flask
+  -> validacion de tipo, sensor, modo y sesion activa
+  -> Firebase Realtime Database /mediciones/<id>
+  -> GET /panel cada dos segundos por el cliente central
+  -> filtros compartidos por modo y sesion
+  -> tarjetas, tabla, estadisticas y graficas.
+
+El snapshot GET /panel incluye firebase, modo, sesion_activa, sesiones
+(ultimas 50) y mediciones (ultimas 300). La respuesta existente GET
+/mediciones?limite=N se conserva. El proxy Vite traduce /api a Flask.
+
+Campos originales de cada lectura: sensor_id (1 o 2),
+aceleracion_x/y/z y giroscopio_x/y/z (enteros raw counts). El backend agrega
+fuente (esp32 o simulado), modo, sesion_id y fecha_servidor (timestamp Unix
+en milisegundos asignado por Firebase). El frontend conserva campos y valores
+originales; muestra raw counts y fecha local del navegador. Registros
+historicos sin fuente se interpretan como ESP32. Los registros previos sin
+sesion_id se consultan en una opcion separada "Historico sin sesion"; nunca
+se mezclan con una sesion identificada.
+
+4. MODO Y SESIONES
+==================
+
+El modo se persiste en Firebase en estado/modo. Valores permitidos: esp32 y
+simulado. Para cambiarlo se requiere no tener una sesion activa (PUT /modo con
+{"modo":"esp32"} o {"modo":"simulado"}). La interfaz bloquea el selector
+mientras una sesion esta abierta.
+
+POST /sesiones crea un UUID, registra inicio/modo/estado y guarda su ID en
+estado/sesion_activa. Puede recibir prueba=promedio o prueba=tea. Los botones
+Iniciar prueba de ambas vistas aseguran el modo esp32 y abren la sesion con
+su tipo; a partir de ahi las lecturas entrantes del firmware quedan asociadas
+a esa prueba. POST /sesiones/cerrar marca fin, finaliza la sesion y elimina
+el puntero activo con delete() (Firebase no acepta un None como valor raiz);
+los registros historicos no se borran. POST /mediciones rechaza HTTP 409 si
+no hay sesion activa o si la fuente no coincide con el modo actual. El
+simulador envia fuente=simulado. El firmware no necesita cambios: la API
+considera ESP32 las lecturas que no declaran esa marca.
+
+Cada sesion registra su modo. Graficas, conteos, tabla y lecturas recientes
+filtran tanto por modo como por una sola sesion; si no hay sesion activa, no
+se atribuyen lecturas a una sesion actual. El selector permite consultar
+sesiones anteriores sin cambiar sus datos. El snapshot limita el historial a
+300 lecturas y 50 sesiones recientes; Firebase conserva los registros
+historicos completos.
+
+5. VISION, ESP32 Y FIREBASE
 ===========================
 
-Desde frontend/:
+El codigo no contiene modulo de vision artificial ni endpoint para iniciarlo.
+Por eso el estado es No configurada.
 
+El firmware activo esta en firmware/ESP32_MPU6050_WIFI/ y transmite los dos
+MPU6050 por HTTP/JSON. Configurar WIFI_SSID, WIFI_PASSWORD y API_URL en ese
+archivo para la LAN. La API informa datos recibidos recientemente a partir
+del timestamp de cada registro; el umbral de la interfaz es diez segundos.
+La desconexion requiere esperar ese umbral para reflejarse.
+
+Solo el backend usa Firebase Admin. Configurar FIREBASE_DATABASE_URL y
+FIREBASE_SERVICE_ACCOUNT_FILE; por defecto la credencial es
+backend/serviceAccountKey.json. La clave privada no debe versionarse. En el
+nodo activo se agregan estado/modo, estado/sesion_activa, sesiones/<uuid> y
+mediciones/<push-id>.
+
+6. ARCHIVOS MIGRADOS / VERSIONES RETIRADAS
+==========================================
+
+Desde 01_ESP32_MPU6050_WIFI:
+- 03_servidor_wifi_firebase.py: su contrato Firebase ya estaba integrado en
+  backend/servidor_firebase.py; se conservaron el POST compatible y el GET
+  requerido por el panel, agregando modo y sesiones.
+- 04_simulador_wifi.py: funcion equivalente consolidada en
+  backend/simulador_wifi.py; ahora marca fuente=simulado.
+- 03_servidor_wifi.py y 01_crear_base_datos.sql: alternativa MySQL heredada,
+  incompatible con Firebase y fuera del flujo activo. Se conservan en el ZIP
+  de respaldo, no como un segundo backend funcional.
+- 01_ESP32_MPU6050_WIFI.ino y requirements.txt: firmware/requirements
+  heredados, no son el firmware/dependencias activos. El sketch activo esta
+  en firmware/ESP32_MPU6050_WIFI/ y los paquetes del API en backend/.
+- LEEME_PRIMERO_Firebase_actualizado.txt: referencia respaldada; instrucciones
+  anteriores quedan sustituidas por este documento y README.md.
+
+Desde Web_interface:
+- prueba.html, ingenismus.css e ingenismus.js: reemplazados por la app React,
+  frontend/src/ingenismus.css, App.jsx, servicios y GraficaLecturas.jsx.
+- Chart.js y acceso Firebase de navegador retirados para evitar interfaz
+  paralela y credenciales de Firebase en el cliente.
+
+No quedan dependencias ejecutables de esos dos directorios. Guia_ingenismus
+es material historico; sus ejemplos de rutas describen la version anterior y
+no son comandos de arranque vigentes.
+
+7. CONFIGURACION Y EJECUCION
+============================
+
+Backend (desde la raiz):
+  py -m venv .venv
+  .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+  $env:FIREBASE_DATABASE_URL = "https://<proyecto>-default-rtdb.firebaseio.com"
+  .\.venv\Scripts\python.exe backend\servidor_firebase.py
+
+Frontend (desde frontend):
   npm install
   npm run dev
 
-En Windows PowerShell tambien se puede usar npm.cmd. Vite escucha por defecto
-en el puerto 5173 y reenvia /api al backend. Para cambiar el destino del proxy,
-copia frontend/.env.example a frontend/.env.local y cambia
-VITE_API_PROXY_TARGET. Reinicia Vite despues de cambiarlo.
+Modo simulado: en Recoleccion selecciona Simulacion antes de iniciar la
+sesion. Despues de iniciar backend y frontend, desde la raiz ejecuta en otra
+terminal:
+  .\.venv\Scripts\python.exe backend\simulador_wifi.py
+Deten Ctrl+C para parar el generador. Cierra la sesion desde la interfaz;
+solo entonces puedes cambiar al modo ESP32 real. Las lecturas simuladas son
+ficticias y se etiquetan; nunca indican que el hardware esta conectado.
 
-5. BACKEND, DEPENDENCIAS Y EJECUCION
-====================================
+El API escucha en 0.0.0.0:5000; Vite reenvia /api al host configurado por
+VITE_API_PROXY_TARGET (frontend/.env.local; predeterminado
+http://127.0.0.1:5000). Para usar ESP32, API_URL del firmware debe apuntar a
+la IP LAN de la computadora, puerto 5000.
 
-Requisitos Python: 3.10 o posterior. Las dependencias activas estan en
-backend/requirements.txt:
+8. VALIDACION
+=============
 
-  Flask >=3.0,<4.0
-  firebase-admin >=6.5,<8.0
-
-Desde la raiz, instalar y arrancar:
-
-  py -m venv .venv
-  .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-  .\.venv\Scripts\python.exe backend\servidor_firebase.py
-
-En macOS/Linux, sustituir el ejecutable de Windows por .venv/bin/python.
-La clave privada JSON se debe guardar localmente y no versionarse. El backend
-la busca por defecto en backend/serviceAccountKey.json.
-
-6. DIFERENCIAS ENTRE BACKENDS Y DECISION DE INTEGRACION
-======================================================
-
-El backend previo en backend/servidor_firebase.py ya era una API Firebase:
-validaba los siete enteros, aceptaba sensor_id 1 o 2 y guardaba POST
-/mediciones en el nodo mediciones. Tambien incluia GET /mediciones, necesario
-para alimentar la interfaz, variables de entorno para Firebase y puerto, y
-errores HTTP de servicio mas claros.
-
-La version actualizada 03_servidor_wifi_firebase.py conserva el mismo esquema
-POST/Firebase pero no implementa GET para el frontend, deja URL y puerto fijos
-y captura errores de forma mas general. Se conservaron en backend las mejores
-capacidades de ambas: POST del firmware y GET del panel, configuracion por
-entorno, validacion y errores explicitos. Se amplio el limite GET a 300, que
-es el historico solicitado por la interfaz original.
-
-La otra version 03_servidor_wifi.py usa MySQL y es heredada. No se combina con
-la API Firebase activa. requirements.txt en la carpeta de referencia incluye
-paquetes MySQL/USB y no firebase-admin, por lo que no debe usarse para instalar
-el backend activo. La aplicacion principal no tenia un receptor USB Firebase;
-el flujo documentado y conservado es Wi-Fi.
-
-7. ENDPOINTS Y CONTRATO DE DATOS
-===============================
-
-GET / devuelve estado basico de la API.
-GET /mediciones?limite=N devuelve {"firebase":"conectado",
-"mediciones":[...]}; N acepta 1 a 300. Registros recientes primero.
-POST /mediciones espera Content-Type application/json y:
-
-  sensor_id: entero 1 o 2
-  aceleracion_x, aceleracion_y, aceleracion_z: enteros
-  giroscopio_x, giroscopio_y, giroscopio_z: enteros
-
-Una escritura correcta responde HTTP 201, ID Firebase y sensor_id. Firebase agrega
-fecha_servidor como timestamp Unix en milisegundos. El firmware y simulador
-usan estos mismos nombres. El proxy de Vite cambia /api/mediciones a
-/mediciones en el host Flask configurado.
-
-8. ESP32, MPU6050 Y RED
-======================
-
-El firmware activo es firmware/ESP32_MPU6050_WIFI/ESP32_MPU6050_WIFI.ino.
-Usa dos buses I2C: sensor 1 SDA/SCL 21/22, sensor 2 27/26, direccion MPU
-0x68. En la parte superior del .ino, configura WIFI_SSID, WIFI_PASSWORD y
-API_URL con la IPv4 de la computadora y puerto 5000 (no localhost). El ESP32
-y la computadora deben estar en la misma red, con acceso TCP entrante a Flask.
-La computadora requiere Internet para escribir en Firebase.
-
-Se reemplazaron los datos concretos de Wi-Fi e IP que estaban guardados en el
-firmware por marcadores de configuracion. Antes de cargar el programa hay que
-completar esos tres valores. No se cambio el JSON, pines, sensores ni la logica
-de adquisicion.
-
-9. FIREBASE Y VARIABLES DE ENTORNO
-==================================
-
-FIREBASE_DATABASE_URL: URL Realtime Database. Si no se define, la API conserva
-la URL de proyecto que tenia el codigo.
-FIREBASE_SERVICE_ACCOUNT_FILE: ruta a la clave JSON. Por defecto
-backend/serviceAccountKey.json (ruta relativa a la carpeta desde donde se
-inicia Python).
-HTTP_PORT: puerto de Flask; predeterminado 5000.
-VITE_API_PROXY_TARGET: host/puerto del backend para Vite; predeterminado
-http://127.0.0.1:5000. Configurar en frontend/.env.local.
-API_URL: endpoint de simulador; predeterminado
-http://127.0.0.1:5000/mediciones.
-
-El archivo raiz .env.example documenta valores sin secretos, pero Vite carga
-variables desde frontend/.env.local porque npm run dev se ejecuta desde
-frontend. No se incluyen credenciales Firebase en el navegador ni en estos
-ejemplos.
-
-10. ARCHIVOS A CAMBIAR PARA AJUSTES COMUNES
-==========================================
-
-Estilos y colores: frontend/src/styles.css.
-Navegacion/paginas/tabla: frontend/src/App.jsx.
-Trazos, leyenda y ejes: frontend/src/components/GraficaLecturas.jsx.
-Ruta/limite de lectura desde navegador: frontend/src/services/mediciones.js.
-Proxy del frontend: frontend/vite.config.js y frontend/.env.local.
-Validacion, campos, limite y Firebase: backend/servidor_firebase.py.
-Intervalo/datos generados del simulador: backend/simulador_wifi.py.
-SSID, clave local, IP API y pines: firmware/ESP32_MPU6050_WIFI/ESP32_MPU6050_WIFI.ino.
-URL Firebase y ruta de credencial: variables FIREBASE_* del entorno.
-
-11. VALIDACION REALIZADA Y PENDIENTE
-====================================
-
-Pruebas realizadas:
-- npm run build: correcto con Vite 5.4.21; genero el bundle de produccion.
+Comprobado localmente:
+- npm.cmd run build: Vite 5.4.21 genero bundle correctamente.
+- py -m py_compile backend/servidor_firebase.py backend/simulador_wifi.py:
+  sintaxis Python correcta.
+- Flask test client con una implementacion Firebase en memoria: GET /panel,
+  cambio de modo, apertura/cierre de sesion, rechazo de fuente incorrecta,
+  POST de una lectura simulada y asociacion con session_id correctos.
 - npm run dev: Vite inicio en http://127.0.0.1:5173.
-- HTTP GET a la raiz Vite: 200 y entrega index.html.
-- HTTP HEAD a un video local: 200, Content-Type video/mp4 y tamano esperado.
-- Los dos videos se copiaron a dist/videos al compilar.
-- Sintaxis de backend/servidor_firebase.py y backend/simulador_wifi.py:
-  compilacion en memoria correcta.
-- Flask test client con Firebase sustituido por un stub en memoria:
-  GET /, GET /mediciones, limite maximo, rechazo de cuerpo POST incompleto,
-  POST correcto 201, ID y timestamp de servidor correctos.
-- La credencial backend/serviceAccountKey.json no esta presente en este
-  entorno; no se intento acceder a la base Firebase real.
+- GET de index.html y del punto de entrada: HTTP 200.
+- HEAD de un video local: HTTP 200, Content-Type video/mp4.
+- Se detuvo el servidor Vite despues de verificarlo.
+- Los respaldos ZIP contienen las fuentes de los dos directorios y el HTML
+  previo; luego se retiraron los directorios y el HTML roto.
 
-Pruebas pendientes:
-- Navegacion, selector, refresco de graficas y reproduccion verificados de
-  forma interactiva en navegador; se comprobo el inicio HTTP, no se automatizo
-  interaccion de navegador.
-- Lectura/escritura real contra Firebase: requiere clave privada local y red.
-- Lecturas del ESP32 y los dos MPU6050 fisicos: requiere hardware/red.
-- Consola del navegador y flujo completo ESP32 -> Firebase -> interfaz:
-  requiere la configuracion y hardware externos.
+Pendiente por requerir configuracion externa:
+- GET/POST contra Firebase real y persistencia en el proyecto Firebase.
+- Flujo simulado completo usando Firebase configurado.
+- Dos MPU6050 y ESP32 fisicos, desconexion de red y verificacion de lecturas.
+- Pruebas interactivas de navegador y consola.
+- Vision artificial: no existe implementacion en este repositorio.
 
-El simulador solo comprueba el flujo de prueba con datos inventados; nunca
-confirma sensores fisicos. El test client usa Firebase falso en memoria y no
-cuenta como una prueba de la base real.
-
-12. CAMBIOS Y ARCHIVOS ELIMINADOS
-================================
-
-Integracion: frontend/src/App.jsx, frontend/src/styles.css,
-frontend/src/services/mediciones.js, frontend/vite.config.js, backend/
-servidor_firebase.py y backend/simulador_wifi.py.
-Nuevos: frontend/src/components/GraficaLecturas.jsx,
-frontend/public/videos/*, frontend/.env.example y este documento.
-Documentacion actualizada: README.md y .env.example.
-Firmware ajustado por seguridad: se quitaron valores locales de Wi-Fi/IP y se
-pusieron marcadores para configurarlos antes de cargar.
-Archivos fuente eliminados: ninguno. La compilacion de Vite reemplaza los
-artefactos generados anteriores de frontend/dist por el bundle y medios
-actuales; no se usan como fuente de desarrollo.
+El test API usa Firebase simulado en memoria, no cuenta como prueba de Firebase
+real. El simulador produce datos ficticios y no confirma hardware. No se
+modifico el firmware.
+Las vistas Pacientes promedio y Pacientes con TEA conservan sus nombres y
+navegacion, pero ambas reproducen frontend/public/videos/CaricaturaPruebas.mp4.
+Los otros videos ya no se publican desde frontend/public/videos.

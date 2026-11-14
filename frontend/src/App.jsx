@@ -1,212 +1,224 @@
 import { useEffect, useMemo, useState } from 'react';
-import { obtenerMediciones } from './services/mediciones';
+import { cambiarModo, cerrarSesion, iniciarSesion, obtenerPanel } from './services/mediciones';
 import GraficaLecturas from './components/GraficaLecturas';
 
-const participantes = [
-  { code: 'P-0001', group: 'Sin diagnóstico', age: '7 años', status: 'Activo' },
-  { code: 'P-0002', group: 'TEA nivel 1', age: '9 años', status: 'Pendiente' },
-  { code: 'P-0003', group: 'Referencia indefinida', age: '8 años', status: 'Activo' }
-];
-
-const sesiones = [
-  { code: 'S-0001', participant: 'P-0001', test: 'TestTactileAudio', state: 'En curso' },
-  { code: 'S-0002', participant: 'P-0002', test: 'TestTactileAudio', state: 'Planificada' },
-  { code: 'S-0003', participant: 'P-0003', test: 'TestTactileAudio', state: 'Finalizada' }
-];
-
 const vistas = [
-  ['inicio', 'Inicio'], ['visualizacion', 'Visualización'],
-  ['estadisticas', 'Estadísticas'], ['resultados', 'Resultados'],
-  ['recoleccion', 'Recolección'], ['configuracion', 'Configuración']
+  ['inicio', 'Inicio'], ['visualizacion', 'Visualización'], ['estadisticas', 'Estadísticas'],
+  ['resultados', 'Resultados'], ['recoleccion', 'Recolección'], ['configuracion', 'Configuración']
 ];
 
 function timestampDe(medicion) {
   const fecha = medicion?.fecha_servidor;
   if (typeof fecha === 'number') return fecha;
-  if (typeof fecha === 'string') {
-    const numero = Number(fecha);
-    return Number.isNaN(numero) ? Date.parse(fecha) : numero;
-  }
+  if (typeof fecha === 'string') return Number.isNaN(Number(fecha)) ? Date.parse(fecha) : Number(fecha);
   return Number.NaN;
 }
 
 function horaDe(medicion) {
   const timestamp = timestampDe(medicion);
-  return Number.isFinite(timestamp)
-    ? new Date(timestamp).toLocaleString()
-    : 'hora desconocida';
+  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : 'Hora desconocida';
 }
 
-function VideoPage({ tipo }) {
+function VideoPage({ tipo, sesion, lecturas, modo, apiEstado, accionando, error, onIniciar }) {
   const promedio = tipo === 'promedio';
-  const video = promedio
-    ? '/videos/ChoColat 쇼콜라 - Black Tinkerbell 블랙팅커벨 MV.mp4'
-    : '/videos/TZUYU Run Away M V.mp4';
   const titulo = promedio ? 'Pacientes promedio' : 'Pacientes con TEA';
-  return (
-    <section className="page-content">
-      <div className="page-heading">
-        <p className="eyebrow">Prueba</p>
-        <h2>{titulo}</h2>
-        <p>Registro visual local para la observación del comportamiento de los sensores.</p>
-      </div>
-      <article className="panel video-panel">
-        <h3>Video de {titulo.toLowerCase()}</h3>
-        <video controls preload="metadata" src={video}>
-          Tu navegador no puede reproducir este video.
-        </video>
-      </article>
-    </section>
-  );
+  const pruebaActiva = sesion?.prueba === tipo;
+  return <main className="page-content"><div className="page-heading"><p className="eyebrow">Prueba visual</p><h2>{titulo}</h2><p>Video local de referencia conservado del sitio anterior.</p></div>
+    <section className="panel video-panel"><h3>{titulo}</h3><video controls preload="metadata" src="/videos/CaricaturaPruebas.mp4">Tu navegador no puede reproducir este video.</video>
+      <div className="test-controls"><button className="primary-button" disabled={accionando || apiEstado !== 'conectado' || Boolean(sesion)} onClick={() => onIniciar(tipo)}>{pruebaActiva ? 'Prueba en curso' : 'Iniciar prueba'}</button>
+        <p>{pruebaActiva ? `Sesión ${sesion.id}: ${lecturas} lecturas recibidas del ESP32.` : sesion ? `Hay otra sesión activa (${sesion.prueba || 'recolección'}). Ciérrala en Recolección para iniciar esta prueba.` : modo !== 'esp32' ? 'Al iniciar, el sistema cambiará a ESP32 real y abrirá una sesión para esta prueba.' : 'Al iniciar, se abrirá una sesión y el backend empezará a guardar las lecturas que envíe el ESP32.'}</p>
+      </div>{error && <p className="connection-message" role="alert">{error}</p>}
+    </section></main>;
 }
 
 function App() {
-  const [mediciones, setMediciones] = useState([]);
+  const [panel, setPanel] = useState({ mediciones: [], sesiones: [], modo: 'esp32', sesion_activa: null });
   const [apiEstado, setApiEstado] = useState('cargando');
   const [error, setError] = useState('');
-  const [sensorId, setSensorId] = useState('1');
   const [vista, setVista] = useState('inicio');
   const [menuPrueba, setMenuPrueba] = useState(false);
+  const [sensorId, setSensorId] = useState('1');
+  const [sesionId, setSesionId] = useState('actual');
   const [actualizada, setActualizada] = useState(null);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [accionando, setAccionando] = useState(false);
 
   useEffect(() => {
     let activa = true;
     let temporizador;
     let controlador;
-
     const actualizar = async () => {
       controlador = new AbortController();
       try {
-        const respuesta = await obtenerMediciones({ signal: controlador.signal });
+        const datos = await obtenerPanel({ signal: controlador.signal });
         if (!activa) return;
-        setMediciones(respuesta.mediciones);
-        setApiEstado(respuesta.firebase === 'conectado' ? 'conectado' : 'desconocido');
+        setPanel(datos);
+        setApiEstado(datos.firebase === 'conectado' ? 'conectado' : 'desconocido');
         setActualizada(Date.now());
-        setError(respuesta.firebase === 'conectado' ? '' : 'La API respondió, pero no confirmó la conexión con Firebase.');
-      } catch (errorCarga) {
-        if (!activa || errorCarga.name === 'AbortError') return;
+        setError(datos.firebase === 'conectado' ? '' : 'El backend no confirmó Firebase.');
+      } catch (fallo) {
+        if (!activa || fallo.name === 'AbortError') return;
         setApiEstado('desconectado');
-        setError(errorCarga.message);
+        setError(fallo.message);
       } finally {
         if (activa) temporizador = window.setTimeout(actualizar, 2000);
       }
     };
-
     actualizar();
-    return () => {
-      activa = false;
-      window.clearTimeout(temporizador);
-      controlador?.abort();
-    };
-  }, [refreshKey]);
+    return () => { activa = false; window.clearTimeout(temporizador); controlador?.abort(); };
+  }, []);
 
   useEffect(() => {
     document.querySelectorAll('video').forEach((video) => video.pause());
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [vista]);
 
-  const medicionesSensor = useMemo(
-    () => mediciones.filter((dato) => Number(dato.sensor_id) === Number(sensorId)),
-    [mediciones, sensorId]
+  const modo = panel.modo === 'simulado' ? 'simulado' : 'esp32';
+  const activa = panel.sesion_activa;
+  const sesionSeleccionada = sesionId === 'actual'
+    ? activa
+    : (panel.sesiones || []).find((sesion) => sesion.id === sesionId);
+  const modoDatos = sesionSeleccionada?.modo || modo;
+  const registrosModo = useMemo(
+    () => panel.mediciones.filter((dato) => dato.fuente === modoDatos || (!dato.fuente && modoDatos === 'esp32')),
+    [panel.mediciones, modoDatos]
   );
-  const ultima = medicionesSensor[0];
-  const reciente = (medicion) => {
-    const timestamp = timestampDe(medicion);
+  const sesiones = panel.sesiones || [];
+  const registrosSesion = useMemo(() => {
+    if (sesionId === 'sin-sesion') return registrosModo.filter((dato) => !dato.sesion_id);
+    return sesionSeleccionada?.id
+      ? registrosModo.filter((dato) => dato.sesion_id === sesionSeleccionada.id)
+      : [];
+  }, [registrosModo, sesionSeleccionada, sesionId]);
+  const medicionesSensor = useMemo(
+    () => registrosSesion.filter((dato) => Number(dato.sensor_id) === Number(sensorId)),
+    [registrosSesion, sensorId]
+  );
+  const reciente = (dato) => {
+    const timestamp = timestampDe(dato);
     return Number.isFinite(timestamp) && Date.now() - timestamp <= 10000;
   };
-  const estadoTexto = apiEstado === 'conectado'
-    ? 'Conectado'
-    : apiEstado === 'cargando' ? 'Conectando…' : apiEstado === 'desconocido' ? 'Sin confirmar' : 'Desconectado';
+  const estadoTexto = apiEstado === 'conectado' ? 'Conectado'
+    : apiEstado === 'cargando' ? 'Conectando…'
+      : apiEstado === 'desconocido' ? 'Sin confirmar' : 'Desconectado';
+  const datosRecientes = panel.mediciones.some((dato) =>
+    (dato.fuente === modo || (!dato.fuente && modo === 'esp32')) && reciente(dato)
+  );
+  const lecturasPrueba = activa
+    ? panel.mediciones.filter((dato) => dato.sesion_id === activa.id).length
+    : 0;
 
-  const irA = (destino) => {
-    setVista(destino);
-    setMenuPrueba(false);
-  };
+  async function ejecutarAccion(accion) {
+    setAccionando(true);
+    setError('');
+    try {
+      await accion();
+      const datos = await obtenerPanel();
+      setPanel(datos);
+    } catch (fallo) {
+      setError(fallo.message);
+    } finally {
+      setAccionando(false);
+    }
+  }
 
-  const navegacion = (
+  async function iniciarPrueba(tipo) {
+    await ejecutarAccion(async () => {
+      if (activa) throw new Error('Cierra la sesión activa antes de iniciar otra prueba.');
+      if (modo !== 'esp32') await cambiarModo('esp32');
+      await iniciarSesion(tipo);
+    });
+  }
+
+  function irA(destino) { setVista(destino); }
+
+  return <div className="app-shell">
+    <header className="topbar">
+      <div><p className="eyebrow">Sistema de visualización de sensores</p><h1>Ingenismus</h1></div>
+      <button className="primary-button" onClick={() => irA('recoleccion')}>Ir a recolección</button>
+    </header>
     <nav className="main-nav" aria-label="Navegación principal">
-      {vistas.slice(0, 3).map(([id, texto]) => (
-        <button key={id} className={`nav-item ${vista === id ? 'active' : ''}`} onClick={() => irA(id)}>{texto}</button>
-      ))}
-      <div className="nav-dropdown">
-        <button className={`nav-item ${vista === 'promedio' || vista === 'tea' ? 'active' : ''}`} aria-expanded={menuPrueba} onClick={() => setMenuPrueba(!menuPrueba)}>
-          Prueba <span aria-hidden="true">⌄</span>
-        </button>
-        {menuPrueba && <div className="dropdown-menu">
-          <button onClick={() => irA('promedio')}>Pacientes promedio</button>
-          <button onClick={() => irA('tea')}>Pacientes con TEA</button>
-        </div>}
+      {vistas.slice(0, 3).map(([id, texto]) => <button key={id} className={`nav-item ${vista === id ? 'active' : ''}`} onClick={() => irA(id)}>{texto}</button>)}
+      <div className="nav-dropdown"><button className={`nav-item ${['promedio', 'tea'].includes(vista) ? 'active' : ''}`} aria-expanded={menuPrueba} onClick={() => setMenuPrueba(!menuPrueba)}>Prueba</button>
+        {menuPrueba && <div className="dropdown-menu"><button onClick={() => { setVista('promedio'); setMenuPrueba(false); }}>Pacientes promedio</button><button onClick={() => { setVista('tea'); setMenuPrueba(false); }}>Pacientes con TEA</button></div>}
       </div>
-      {vistas.slice(3).map(([id, texto]) => (
-        <button key={id} className={`nav-item ${vista === id ? 'active' : ''}`} onClick={() => irA(id)}>{texto}</button>
-      ))}
+      {vistas.slice(3).map(([id, texto]) => <button key={id} className={`nav-item ${vista === id ? 'active' : ''}`} onClick={() => irA(id)}>{texto}</button>)}
     </nav>
-  );
 
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div><p className="eyebrow">Sistema de visualización de sensores</p><h1>Ingenismus</h1></div>
-        <button className="primary-button" onClick={() => irA('recoleccion')}>Ir a recolección</button>
-      </header>
-      {navegacion}
+    {vista === 'inicio' && <main className="layout-grid">
+      <section className="panel overview-panel">
+        <div className="panel-header"><h2>Estado del sistema</h2><span className={`badge ${apiEstado === 'conectado' ? 'success' : ''}`}>API y Firebase: {estadoTexto}</span></div>
+        <div className="status-grid">
+          <Status label="Modo activo" value={modo === 'simulado' ? 'Simulación' : 'ESP32 real'} state="ok" />
+          <Status label="Firebase" value={estadoTexto} state={apiEstado === 'conectado' ? 'ok' : 'warn'} />
+          <Status label="Visión artificial" value="No configurada" state="idle" />
+          <Status label={modo === 'simulado' ? 'Simulador' : 'ESP32'} value={datosRecientes ? 'Recibiendo lecturas' : 'Sin lecturas recientes'} state={datosRecientes ? 'ok' : 'warn'} />
+        </div>
+        <p className="updated-at">{actualizada ? `Última consulta: ${new Date(actualizada).toLocaleTimeString()}` : 'Consultando al backend…'}</p>
+        {error && <p className="connection-message" role="status">{error}</p>}
+      </section>
+      <section className="panel stats-panel"><div className="panel-header"><h2>Resumen de la fuente activa</h2><button className="text-button" onClick={() => irA('estadisticas')}>Ver estadísticas</button></div>
+        <div className="metrics"><div><span>Lecturas de esta sesión</span><strong>{registrosSesion.length}</strong></div><div><span>Última lectura</span><strong className="metric-time">{registrosSesion[0] ? horaDe(registrosSesion[0]) : 'Sin datos'}</strong></div><div><span>Sesión actual</span><strong className="metric-time">{activa ? activa.id : 'Sin sesión'}</strong></div></div>
+      </section>
+      <section className="panel session-panel"><div className="panel-header"><h2>Sesiones registradas</h2><span className="badge">Historial de Firebase</span></div>
+        {sesiones.length ? <ul className="list-block compact">{sesiones.slice(0, 6).map((s) => <li key={s.id}><div><strong>{s.id}</strong><span>{s.modo === 'simulado' ? 'Simulación' : 'ESP32 real'}</span></div><small>{new Date(s.inicio).toLocaleString()}</small><span className="tag subtle">{s.estado}</span></li>)}</ul> : <p className="empty-state">No hay sesiones guardadas.</p>}
+      </section>
+      <section className="panel side-panel"><div className="panel-header"><h2>Estado de sensores</h2><span className="badge">Consulta cada 2 s</span></div>
+        <ul className="sensor-list">{[1, 2].map((id) => { const dato = registrosModo.find((item) => Number(item.sensor_id) === id); return <li key={id}><span className={`dot ${dato && reciente(dato) ? 'ok' : 'warn'}`} /><div className="sensor-reading"><strong>MPU6050 {id}</strong><small>{dato ? horaDe(dato) : 'Sin lecturas'}</small><small>{dato ? `Acel. X ${dato.aceleracion_x} · Y ${dato.aceleracion_y} · Z ${dato.aceleracion_z}` : 'Esperando datos del modo activo'}</small></div></li>; })}</ul>
+      </section>
+      <section className="panel event-panel"><div className="panel-header"><h2>Lecturas recientes</h2><button className="text-button" onClick={() => irA('resultados')}>Ver registros</button></div>
+        {registrosSesion.length ? <ul className="event-feed">{registrosSesion.slice(0, 5).map((dato) => <li key={dato.id}>Sensor {dato.sensor_id} · {horaDe(dato)}</li>)}</ul> : <p className="empty-state">Inicia una sesión y espera lecturas del modo activo.</p>}
+      </section>
+    </main>}
 
-      {vista === 'inicio' && <main className="layout-grid">
-        <section className="panel overview-panel">
-          <div className="panel-header"><h2>Estado del sistema</h2><span className={`badge ${apiEstado === 'conectado' ? 'success' : ''}`}>Firebase: {estadoTexto}</span></div>
-          <div className="status-grid">
-            {[
-              { label: 'API local', value: estadoTexto, state: apiEstado === 'conectado' ? 'ok' : 'idle' },
-              { label: 'Firebase', value: estadoTexto, state: apiEstado === 'conectado' ? 'ok' : 'idle' },
-              { label: 'Visión artificial', value: 'No conectada', state: 'idle' },
-              { label: 'ESP32', value: mediciones.some(reciente) ? 'Recibiendo datos' : 'Sin datos recientes', state: mediciones.some(reciente) ? 'ok' : 'warn' }
-            ].map((item) => <div key={item.label} className="status-card"><span className={`dot ${item.state}`} /><div><strong>{item.label}</strong><p>{item.value}</p></div></div>)}
-          </div>
-          <p className="updated-at">{actualizada ? `Última consulta: ${new Date(actualizada).toLocaleTimeString()}` : 'Consultando el servicio…'}</p>
-          {error && <p className="connection-message" role="status">{error}</p>}
-        </section>
+    {vista === 'visualizacion' && <main className="page-content">
+      <div className="page-heading"><p className="eyebrow">Modo {modoDatos} · {registrosSesion.length} registros</p><h2>Visualización</h2><p>Gráficas, mediciones y tabla consumen el mismo conjunto filtrado por modo y sesión.</p></div>
+      <section className="panel chart-controls"><label htmlFor="sensor-select">Sensor</label><select id="sensor-select" value={sensorId} onChange={(event) => setSensorId(event.target.value)}><option value="1">MPU6050 1</option><option value="2">MPU6050 2</option></select><label htmlFor="session-select">Sesión</label><SessionSelect id="session-select" sesiones={sesiones} value={sesionId} onChange={setSesionId} activa={activa} haySinSesion={registrosModo.some((dato) => !dato.sesion_id)} /><span>{medicionesSensor.length} lecturas</span></section>
+      <section className="chart-grid"><GraficaLecturas mediciones={medicionesSensor} tipo="aceleracion" titulo={`Acelerómetro · Sensor ${sensorId}`} /><GraficaLecturas mediciones={medicionesSensor} tipo="giroscopio" titulo={`Giroscopio · Sensor ${sensorId}`} /></section>
+      <ReadingsTable mediciones={medicionesSensor} sensor />
+    </main>}
 
-        <section className="panel stats-panel"><div className="panel-header"><h2>Resumen de lecturas</h2><button className="text-button" onClick={() => irA('estadisticas')}>Ver estadísticas</button></div>
-          <div className="metrics"><div><span>Lecturas recibidas</span><strong>{mediciones.length}</strong></div><div><span>Última del sensor {sensorId}</span><strong className="metric-time">{ultima ? horaDe(ultima) : 'Sin datos'}</strong></div><div><span>Registro actual</span><strong>{ultima ? `MPU6050 ${ultima.sensor_id}` : 'Esperando'}</strong></div></div>
-        </section>
+    {vista === 'estadisticas' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Modo {modoDatos} · misma sesión seleccionada</p><h2>Estadísticas</h2><p>Conteos calculados sobre los registros visibles de la sesión.</p></div>
+      <section className="panel chart-controls"><label htmlFor="stats-session">Sesión</label><SessionSelect id="stats-session" sesiones={sesiones} value={sesionId} onChange={setSesionId} activa={activa} haySinSesion={registrosModo.some((dato) => !dato.sesion_id)} /></section>
+      <section className="metrics stat-cards"><div><span>Total de lecturas</span><strong>{registrosSesion.length}</strong></div><div><span>MPU6050 1</span><strong>{registrosSesion.filter((m) => Number(m.sensor_id) === 1).length}</strong></div><div><span>MPU6050 2</span><strong>{registrosSesion.filter((m) => Number(m.sensor_id) === 2).length}</strong></div><div><span>Última lectura</span><strong className="metric-time">{registrosSesion[0] ? horaDe(registrosSesion[0]) : 'Sin datos'}</strong></div></section>
+      <section className="chart-grid"><GraficaLecturas mediciones={registrosSesion.filter((m) => Number(m.sensor_id) === 1)} tipo="aceleracion" titulo="Acelerómetro · Sensor 1" /><GraficaLecturas mediciones={registrosSesion.filter((m) => Number(m.sensor_id) === 2)} tipo="aceleracion" titulo="Acelerómetro · Sensor 2" /></section></main>}
 
-        <section className="panel participants-panel"><div className="panel-header"><h2>Participantes</h2><span className="badge">Datos de demostración</span></div>
-          <ul className="list-block">{participantes.map((p) => <li key={p.code}><div><strong>{p.code}</strong><span>{p.group}</span></div><small>{p.age}</small><span className="tag">{p.status}</span></li>)}</ul>
-        </section>
-        <section className="panel session-panel"><div className="panel-header"><h2>Sesiones</h2><span className="badge">Datos de demostración</span></div>
-          <ul className="list-block compact">{sesiones.map((s) => <li key={s.code}><div><strong>{s.code}</strong><span>{s.participant}</span></div><small>{s.test}</small><span className="tag subtle">{s.state}</span></li>)}</ul>
-        </section>
+    {vista === 'resultados' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Modo {modoDatos} · registros conservados en Firebase</p><h2>Resultados</h2><p>El historial conserva las mediciones de cada sesión.</p></div>
+      <section className="panel chart-controls"><label htmlFor="results-session">Sesión</label><SessionSelect id="results-session" sesiones={sesiones} value={sesionId} onChange={setSesionId} activa={activa} haySinSesion={registrosModo.some((dato) => !dato.sesion_id)} /></section>
+      <ReadingsTable mediciones={registrosSesion} /></main>}
 
-        <section className="panel side-panel"><div className="panel-header"><h2>Estado de sensores</h2><span className="badge">Consulta cada 2 s</span></div>
-          <ul className="sensor-list">{[1, 2].map((id) => { const dato = mediciones.find((m) => Number(m.sensor_id) === id); return <li key={id}><span className={`dot ${dato && reciente(dato) ? 'ok' : 'warn'}`} /><div className="sensor-reading"><strong>MPU6050 {id}</strong><small>{dato ? horaDe(dato) : 'Sin lecturas'}</small><small>{dato ? `Acel. X ${dato.aceleracion_x} · Y ${dato.aceleracion_y} · Z ${dato.aceleracion_z}` : 'Esperando datos del sensor'}</small></div></li>; })}</ul>
-        </section>
-        <section className="panel event-panel"><div className="panel-header"><h2>Mediciones recientes</h2><button className="text-button" onClick={() => irA('resultados')}>Ver todas</button></div>
-          {mediciones.length ? <ul className="event-feed">{mediciones.slice(0, 5).map((m) => <li key={m.id}>Sensor {m.sensor_id} · {horaDe(m)}</li>)}</ul> : <p className="empty-state">Las mediciones aparecerán cuando el ESP32 envíe datos.</p>}
-        </section>
-      </main>}
+    {vista === 'recoleccion' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Fuente de datos centralizada</p><h2>Recolección</h2><p>El backend acepta solo lecturas de la fuente activa y las vincula a la sesión abierta.</p></div>
+      <section className="panel collection-controls"><div className="panel-header"><h3>Modo de operación</h3><span className="badge">{modo === 'simulado' ? 'Datos ficticios' : 'Sensores físicos'}</span></div>
+        <label htmlFor="mode-select">Fuente de lecturas</label><select id="mode-select" value={modo} disabled={accionando || Boolean(activa)} onChange={(event) => ejecutarAccion(() => cambiarModo(event.target.value))}><option value="esp32">ESP32 real</option><option value="simulado">Simulación</option></select>
+        <p>{modo === 'simulado' ? 'Inicia el simulador del backend después de abrir una sesión.' : 'El ESP32 debe enviar lecturas al backend por Wi-Fi.'}</p>
+        <div className="session-actions">{activa ? <><p>Sesión <code>{activa.id}</code> · iniciada {new Date(activa.inicio).toLocaleString()}</p><button className="secondary-button" disabled={accionando} onClick={() => ejecutarAccion(cerrarSesion)}>Cerrar sesión</button></> : <><p>No hay sesión activa. Las nuevas lecturas se rechazan hasta iniciarla.</p><button className="primary-button" disabled={accionando || apiEstado !== 'conectado'} onClick={() => ejecutarAccion(iniciarSesion)}>Iniciar sesión</button></>}</div>
+        <p className="connection-message">API/Firebase: {estadoTexto} · Fuente: {datosRecientes ? 'recibiendo datos' : 'sin lecturas recientes'}</p>{error && <p role="alert" className="connection-message">{error}</p>}
+      </section>
+      <section className="panel readings-table"><div className="panel-header"><h3>Historial de sesiones</h3><span className="badge">No se borra al cerrar</span></div>{sesiones.length ? <ul className="list-block compact">{sesiones.map((s) => <li key={s.id}><div><strong>{s.id}</strong><span>{s.modo === 'simulado' ? 'Simulación' : 'ESP32 real'}</span></div><small>{new Date(s.inicio).toLocaleString()} – {s.fin ? new Date(s.fin).toLocaleString() : 'En curso'}</small><span className="tag subtle">{s.estado}</span></li>)}</ul> : <p className="empty-state">Aún no hay sesiones.</p>}</section>
+    </main>}
 
-      {vista === 'visualizacion' && <main className="page-content">
-        <div className="page-heading"><p className="eyebrow">Datos en vivo · últimos {mediciones.length} registros cargados</p><h2>Visualización</h2><p>Lecturas reales entregadas por la API desde Firebase Realtime Database.</p></div>
-        <section className="panel chart-controls"><label htmlFor="sensor-select">Seleccionar sensor</label><select id="sensor-select" value={sensorId} onChange={(event) => setSensorId(event.target.value)}><option value="1">Sensor 1</option><option value="2">Sensor 2</option></select><span>{medicionesSensor.length} lecturas · actualización automática cada 2 s</span><button className="secondary-button" onClick={() => setRefreshKey((key) => key + 1)}>Actualizar datos</button></section>
-        <section className="chart-grid"><GraficaLecturas mediciones={medicionesSensor} tipo="aceleracion"/><GraficaLecturas mediciones={medicionesSensor} tipo="giroscopio"/></section>
-        <section className="panel readings-table"><div className="panel-header"><h3>Lecturas del sensor {sensorId}</h3><span className="badge">Fecha del servidor Firebase</span></div><div className="table-scroll"><table><thead><tr><th>Hora</th><th>Acel. X</th><th>Acel. Y</th><th>Acel. Z</th><th>Giro. X</th><th>Giro. Y</th><th>Giro. Z</th></tr></thead><tbody>{medicionesSensor.slice(0, 20).map((m) => <tr key={m.id}><td>{horaDe(m)}</td><td>{m.aceleracion_x}</td><td>{m.aceleracion_y}</td><td>{m.aceleracion_z}</td><td>{m.giroscopio_x}</td><td>{m.giroscopio_y}</td><td>{m.giroscopio_z}</td></tr>)}</tbody></table>{!medicionesSensor.length && <p className="empty-state">No hay lecturas para este sensor todavía.</p>}</div></section>
-      </main>}
+    {vista === 'configuracion' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Conexión</p><h2>Configuración</h2><p>La red Wi-Fi del ESP32 y Firebase se configuran en el backend y el firmware.</p></div><section className="panel config-list"><div><strong>Snapshot compartido</strong><code>GET /api/panel</code></div><div><strong>Cambio de modo</strong><code>PUT /api/modo</code></div><div><strong>Sesiones</strong><code>POST /api/sesiones · POST /api/sesiones/cerrar</code></div><div><strong>Proxy</strong><code>{import.meta.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:5000'}</code></div><div><strong>Base de datos</strong><code>Firebase Realtime Database</code></div></section></main>}
 
-      {vista === 'estadisticas' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Lecturas almacenadas</p><h2>Estadísticas</h2><p>Resumen calculado con los registros recibidos; no se muestran datos simulados.</p></div><section className="metrics stat-cards"><div><span>Total cargado</span><strong>{mediciones.length}</strong></div><div><span>Sensor 1</span><strong>{mediciones.filter((m) => Number(m.sensor_id) === 1).length}</strong></div><div><span>Sensor 2</span><strong>{mediciones.filter((m) => Number(m.sensor_id) === 2).length}</strong></div><div><span>Última lectura</span><strong className="metric-time">{mediciones[0] ? horaDe(mediciones[0]) : 'Sin datos'}</strong></div></section><section className="chart-grid"><GraficaLecturas mediciones={mediciones.filter((m) => Number(m.sensor_id) === 1)} tipo="aceleracion" titulo="Acelerómetro · Sensor 1"/><GraficaLecturas mediciones={mediciones.filter((m) => Number(m.sensor_id) === 2)} tipo="aceleracion" titulo="Acelerómetro · Sensor 2"/></section></main>}
+    {vista === 'promedio' && <VideoPage tipo="promedio" sesion={activa} lecturas={lecturasPrueba} modo={modo} apiEstado={apiEstado} accionando={accionando} error={error} onIniciar={iniciarPrueba} />}
+    {vista === 'tea' && <VideoPage tipo="tea" sesion={activa} lecturas={lecturasPrueba} modo={modo} apiEstado={apiEstado} accionando={accionando} error={error} onIniciar={iniciarPrueba} />}
 
-      {vista === 'promedio' && <main><VideoPage tipo="promedio"/></main>}
-      {vista === 'tea' && <main><VideoPage tipo="tea"/></main>}
+    <footer className="app-footer">Ingenismus · MPU6050 · Fuente: {modo === 'simulado' ? 'simulación' : 'ESP32 real'} · Firebase</footer>
+  </div>;
+}
 
-      {vista === 'resultados' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Datos de Firebase</p><h2>Resultados</h2><p>Registros más recientes recibidos por la API.</p></div><section className="panel readings-table"><div className="table-scroll"><table><thead><tr><th>Hora</th><th>Sensor</th><th>Acel. X</th><th>Acel. Y</th><th>Acel. Z</th><th>Giro. X</th><th>Giro. Y</th><th>Giro. Z</th></tr></thead><tbody>{mediciones.map((m) => <tr key={m.id}><td>{horaDe(m)}</td><td>{m.sensor_id}</td><td>{m.aceleracion_x}</td><td>{m.aceleracion_y}</td><td>{m.aceleracion_z}</td><td>{m.giroscopio_x}</td><td>{m.giroscopio_y}</td><td>{m.giroscopio_z}</td></tr>)}</tbody></table>{!mediciones.length && <p className="empty-state">No hay registros disponibles.</p>}</div></section></main>}
+function Status({ label, value, state }) {
+  return <div className="status-card"><span className={`dot ${state}`} /><div><strong>{label}</strong><p>{value}</p></div></div>;
+}
 
-      {vista === 'recoleccion' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Sesiones</p><h2>Recolección</h2><p>La captura de lecturas está activa mientras el ESP32 envía datos a la API.</p></div><section className="panel"><h3>Estado de la captura</h3><p className="connection-message">API: {estadoTexto} · ESP32: {mediciones.some(reciente) ? 'recibiendo lecturas' : 'sin lecturas recientes'}</p><button className="secondary-button" onClick={() => irA('visualizacion')}>Consultar lecturas</button></section></main>}
+function SessionSelect({ id, sesiones, value, onChange, activa, haySinSesion }) {
+  return <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
+    <option value="actual">{activa ? 'Sesión activa' : 'Sin sesión activa'}</option>
+    {haySinSesion && <option value="sin-sesion">Histórico sin sesión (sin asignar)</option>}
+    {sesiones.map((sesion) => <option key={sesion.id} value={sesion.id}>{sesion.modo === 'simulado' ? 'Simulación' : 'ESP32'} · {new Date(sesion.inicio).toLocaleString()} · {sesion.estado}</option>)}
+  </select>;
+}
 
-      {vista === 'configuracion' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Conexión</p><h2>Configuración</h2><p>La configuración de red y Firebase se administra en el backend y el archivo de firmware.</p></div><section className="panel config-list"><div><strong>API del frontend</strong><code>/api/mediciones</code></div><div><strong>Proxy de desarrollo</strong><code>http://127.0.0.1:5000</code></div><div><strong>Puerto API</strong><code>HTTP_PORT (por defecto 5000)</code></div><div><strong>Base de datos</strong><code>FIREBASE_DATABASE_URL</code></div><div><strong>Credencial Firebase</strong><code>FIREBASE_SERVICE_ACCOUNT_FILE</code></div></section></main>}
-
-      <footer className="app-footer">Ingenismus · Monitoreo de sensores MPU6050 · Firebase Realtime Database</footer>
-    </div>
-  );
+function ReadingsTable({ mediciones, sensor = false }) {
+  return <section className="panel readings-table"><div className="panel-header"><h3>{sensor ? 'Lecturas del sensor' : 'Registros de la sesión'}</h3><span className="badge">{mediciones.length} registros</span></div><div className="table-scroll"><table><thead><tr><th>Hora</th>{!sensor && <><th>Sensor</th><th>Fuente</th></>}<th>Acel. X</th><th>Acel. Y</th><th>Acel. Z</th><th>Giro. X</th><th>Giro. Y</th><th>Giro. Z</th></tr></thead><tbody>{mediciones.map((m) => <tr key={m.id}><td>{horaDe(m)}</td>{!sensor && <><td>{m.sensor_id}</td><td>{m.fuente || 'ESP32 (histórico)'}</td></>}<td>{m.aceleracion_x}</td><td>{m.aceleracion_y}</td><td>{m.aceleracion_z}</td><td>{m.giroscopio_x}</td><td>{m.giroscopio_y}</td><td>{m.giroscopio_z}</td></tr>)}</tbody></table>{!mediciones.length && <p className="empty-state">No hay lecturas en esta selección.</p>}</div></section>;
 }
 
 export default App;

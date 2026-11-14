@@ -30,6 +30,7 @@ def crear_medicion(sensor_id):
 
     return {
         "sensor_id": sensor_id,
+        "fuente": "simulado",
 
         # Valores ficticios del acelerómetro
         "aceleracion_x": random.randint(-2000, 2000),
