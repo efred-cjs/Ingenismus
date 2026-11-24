@@ -1,0 +1,5 @@
+# Dependencias de Python para USB y servidor Wi-Fi.
+# Instalar desde la terminal: python -m pip install -r requirements.txt
+pyserial
+mysql-connector-python
+Flask

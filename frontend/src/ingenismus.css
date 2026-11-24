@@ -91,6 +91,14 @@ select option { color: white; background: var(--surface); }
 .session-actions p { flex: 1 1 280px; margin: 0; color: var(--muted); }
 .session-actions code { overflow-wrap: anywhere; color: var(--cyan); }
 .collection-controls > p { margin: 0; color: var(--muted); }
+.subject-form { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #071a30ad; }
+.subject-form > p { margin: 0; color: var(--muted); }
+.subject-form code { color: var(--cyan); overflow-wrap: anywhere; }
+.subject-create { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.subject-create label { flex-basis: 100%; }
+.subject-create input { width: 110px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; color: #eaf3ff; background: var(--surface-raised); font: inherit; }
+.historical-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid #00b4fb66; border-radius: 12px; background: #00b4fb12; }
+.historical-banner span { flex: 1 1 240px; color: #b9cbe0; overflow-wrap: anywhere; }
 .chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .chart-panel { overflow: hidden; }
 .chart-panel .panel-header { align-items: flex-start; }

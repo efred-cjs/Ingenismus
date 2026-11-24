@@ -15,8 +15,8 @@
 #include <HTTPClient.h>
 
 // ===== CONFIGURACIÓN QUE DEBES CAMBIAR =====
-const char* WIFI_SSID = "NOMBRE_DE_TU_WIFI";
-const char* WIFI_PASSWORD = "CONTRASENA_DE_TU_WIFI";
+const char* WIFI_SSID = "Silentium-0430";
+const char* WIFI_PASSWORD = "AjueQCqcS2";
 
 // Sustituye 192.168.1.50 por la IPv4 de la computadora donde corre Flask.
 // No uses localhost ni 127.0.0.1 en esta dirección.

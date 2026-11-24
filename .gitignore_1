@@ -1,0 +1,6 @@
+# Credenciales privadas
+serviceAccountKey.json
+*serviceAccountKey*.json
+.env
+.env.*
+!.env.example

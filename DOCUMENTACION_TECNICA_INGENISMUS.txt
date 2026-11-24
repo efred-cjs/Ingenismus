@@ -211,3 +211,18 @@ modifico el firmware.
 Las vistas Pacientes promedio y Pacientes con TEA conservan sus nombres y
 navegacion, pero ambas reproducen frontend/public/videos/CaricaturaPruebas.mp4.
 Los otros videos ya no se publican desde frontend/public/videos.
+
+9. GESTION DE SUJETOS Y SESIONES ASOCIADAS (actualizacion 23 de noviembre de 2026)
+==================================================================================
+
+El backend agrega sujetos anonimos con edad y fecha_registro en /sujetos/<sujeto_id>. El identificador SUJ-<UUID> se genera en el servidor; no se solicita nombre ni otro dato personal. Una sesion nueva exige sujeto_id existente y conserva el esquema global /sesiones/<sesion_id> y /mediciones/<push-id>.
+
+Cada sesion nueva contiene id, sesion_id, sujeto_id, edad (capturada al iniciar), fecha e inicio (milisegundos Unix), modo (con_tea o sin_tea), prueba (tea o promedio cuando se selecciona desde la interfaz), tipo_fuente (esp32 o simulado), estado, fin y marcas de pausa/reanudacion cuando existan. El campo modo global de /estado sigue indicando la fuente activa para no romper el protocolo existente. Las lecturas mantienen sus campos del MPU6050 y agregan sujeto_id, sesion_id, tipo_fuente, fuente, modo y fecha_servidor.
+
+Ciclo de vida: POST /sesiones crea una sesion asociada al sujeto y reclama estado/sesion_activa con una transaccion atomica. POST /sesiones/pausar cambia el estado sin eliminar el puntero; POST /sesiones/reanudar reactiva la misma sesion; POST /sesiones/cerrar finaliza y elimina el puntero. POST /mediciones rechaza sesiones pausadas y etiqueta la lectura con la asociacion activa en el servidor. El simulador y el firmware mantienen el mismo contrato de entrada.
+
+GET /panel devuelve sujetos, sesiones, sesion activa y las 300 lecturas recientes para las vistas en vivo. GET /sesiones/<id>/mediciones?limite=500&cursor=<push-id> consulta el historial completo por sesion en paginas. Esta consulta requiere un indice en Realtime Database: Firebase Console > Realtime Database > Rules, agregar ".indexOn": ["sesion_id"] dentro de la regla existente para /mediciones. Este indice no concede permisos. No cambies las reglas de lectura/escritura existentes; Firebase Admin usa la cuenta de servicio del backend y las reglas no deben abrirse publicamente.
+
+En las vistas Prueba > Pacientes promedio y Prueba > Pacientes con TEA se selecciona/registra el sujeto e inicia la sesion; el tipo de prueba viene dado por la vista. Recoleccion conserva la seleccion de fuente y los controles de pausa, reanudacion y finalizacion. Los selectores de sesion en Visualizacion/Estadisticas/Resultados recuperan las lecturas historicas completas y alimentan las graficas existentes. Una banda identifica la consulta historica y permite regresar a la sesion activa.
+
+Validacion de esta actualizacion: npm run build paso; py_compile paso; prueba de API con Firebase falso en memoria paso para crear/validar sujeto, dos sesiones independientes, duplicado, lecturas simuladas asociadas, pausa/reanudacion y paginacion. No se ha conectado ni escrito a Firebase real, ni se ha comprobado un ESP32 fisico. El indice debe publicarse manualmente si aun no existe.

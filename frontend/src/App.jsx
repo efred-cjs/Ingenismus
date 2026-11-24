@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { cambiarModo, cerrarSesion, iniciarSesion, obtenerPanel } from './services/mediciones';
+import { cambiarModo, cerrarSesion, iniciarSesion, obtenerPanel, crearSujeto, pausarSesion, reanudarSesion, obtenerMedicionesSesion, obtenerMedicionesSinSesion } from './services/mediciones';
 import GraficaLecturas from './components/GraficaLecturas';
 
 const vistas = [
@@ -19,18 +19,25 @@ function horaDe(medicion) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : 'Hora desconocida';
 }
 
-function VideoPage({ tipo, sesion, lecturas, modo, apiEstado, accionando, error, onIniciar }) {
+function VideoPage({ tipo, sesion, lecturas, modo, apiEstado, accionando, error, onIniciar, sujetos, sujetoId, onSujetoChange, edadNueva, onEdadChange, onCrearSujeto }) {
   const promedio = tipo === 'promedio';
   const titulo = promedio ? 'Pacientes promedio' : 'Pacientes con TEA';
   const pruebaActiva = sesion?.prueba === tipo;
-  return <main className="page-content"><div className="page-heading"><p className="eyebrow">Prueba visual</p><h2>{titulo}</h2><p>Video local de referencia conservado del sitio anterior.</p></div>
+  return <main className="page-content"><div className="page-heading"><p className="eyebrow">Prueba visual</p><h2>{titulo}</h2><p>Registra o selecciona el sujeto en esta prueba antes de comenzar.</p></div>
     <section className="panel video-panel"><h3>{titulo}</h3><video controls preload="metadata" src="/videos/CaricaturaPruebas.mp4">Tu navegador no puede reproducir este video.</video>
-      <div className="test-controls"><button className="primary-button" disabled={accionando || apiEstado !== 'conectado' || Boolean(sesion)} onClick={() => onIniciar(tipo)}>{pruebaActiva ? 'Prueba en curso' : 'Iniciar prueba'}</button>
-        <p>{pruebaActiva ? `Sesión ${sesion.id}: ${lecturas} lecturas recibidas del ESP32.` : sesion ? `Hay otra sesión activa (${sesion.prueba || 'recolección'}). Ciérrala en Recolección para iniciar esta prueba.` : modo !== 'esp32' ? 'Al iniciar, el sistema cambiará a ESP32 real y abrirá una sesión para esta prueba.' : 'Al iniciar, se abrirá una sesión y el backend empezará a guardar las lecturas que envíe el ESP32.'}</p>
-      </div>{error && <p className="connection-message" role="alert">{error}</p>}
+      {sesion ? <div className="session-actions"><p>Sujeto <code>{sesion.sujeto_id}</code> · sesión <code>{sesion.id}</code> · {sesion.edad} años · {sesion.modo === 'con_tea' ? 'Con TEA' : 'Sin TEA'} · fuente {sesion.tipo_fuente || modo} · estado {sesion.estado}{pruebaActiva ? ` · ${lecturas} lecturas recibidas` : ''}</p></div> : <>
+        <div className="subject-form"><h3>Registro del sujeto para iniciar</h3>
+          <label htmlFor={`subject-select-${tipo}`}>Selecciona un sujeto existente</label>
+          <select id={`subject-select-${tipo}`} value={sujetoId} disabled={accionando} onChange={(event) => onSujetoChange(event.target.value)}>
+            <option value="">Selecciona un sujeto</option>{sujetos.map((s) => <option key={s.sujeto_id} value={s.sujeto_id}>{s.sujeto_id} · {s.edad} años</option>)}
+          </select>
+          <form onSubmit={onCrearSujeto} className="subject-create"><label htmlFor={`subject-age-${tipo}`}>O registra un sujeto nuevo con su edad</label><input id={`subject-age-${tipo}`} type="number" min="0" max="120" step="1" required value={edadNueva} disabled={accionando} onChange={(event) => onEdadChange(event.target.value)} /><button className="secondary-button" disabled={accionando}>Registrar sujeto</button></form>
+          {sujetoId && <p>Sujeto elegido: <code>{sujetoId}</code>. La prueba iniciará en modo {promedio ? 'sin TEA' : 'con TEA'}.</p>}
+        </div>
+        <div className="test-controls"><button className="primary-button" disabled={accionando || apiEstado !== 'conectado' || !sujetoId} onClick={() => onIniciar(tipo)}>Iniciar prueba {promedio ? 'sin TEA' : 'con TEA'}</button><p>Fuente configurada: {modo === 'simulado' ? 'simulador' : 'ESP32'} · API/Firebase: {apiEstado}</p></div>
+      </>}{error && <p className="connection-message" role="alert">{error}</p>}
     </section></main>;
 }
-
 function App() {
   const [panel, setPanel] = useState({ mediciones: [], sesiones: [], modo: 'esp32', sesion_activa: null });
   const [apiEstado, setApiEstado] = useState('cargando');
@@ -41,6 +48,10 @@ function App() {
   const [sesionId, setSesionId] = useState('actual');
   const [actualizada, setActualizada] = useState(null);
   const [accionando, setAccionando] = useState(false);
+  const [sujetoId, setSujetoId] = useState('');
+  const [edadNueva, setEdadNueva] = useState('');
+  const [lecturasHistoricas, setLecturasHistoricas] = useState([]);
+  const [cargandoHistorico, setCargandoHistorico] = useState(false);
 
   useEffect(() => {
     let activa = true;
@@ -68,6 +79,34 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let vigente = true;
+    const historialSinSesion = sesionId === 'sin-sesion';
+    const sesionIdHist = sesionId !== 'actual' && !historialSinSesion && sesionId !== activa?.id
+      ? sesionId : null;
+    if (!historialSinSesion && !sesionIdHist) { setLecturasHistoricas([]); setCargandoHistorico(false); return undefined; }
+    setLecturasHistoricas([]);
+    setCargandoHistorico(true);
+    (async () => {
+      try {
+        const todas = [];
+        let cursor;
+        do {
+          const pagina = historialSinSesion
+            ? await obtenerMedicionesSinSesion({ cursor })
+            : await obtenerMedicionesSesion(sesionIdHist, { cursor });
+          todas.push(...pagina.mediciones);
+          cursor = pagina.siguiente_cursor;
+        } while (cursor);
+        if (vigente) setLecturasHistoricas(todas.reverse());
+      } catch (fallo) {
+        if (vigente) { setLecturasHistoricas([]); setError(fallo.message); }
+      } finally { if (vigente) setCargandoHistorico(false); }
+    })();
+    return () => { vigente = false; };
+  }, [sesionId, panel.sesion_activa?.id]);
+
+
+  useEffect(() => {
     document.querySelectorAll('video').forEach((video) => video.pause());
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [vista]);
@@ -77,18 +116,18 @@ function App() {
   const sesionSeleccionada = sesionId === 'actual'
     ? activa
     : (panel.sesiones || []).find((sesion) => sesion.id === sesionId);
-  const modoDatos = sesionSeleccionada?.modo || modo;
+  const modoDatos = sesionSeleccionada?.tipo_fuente || (['simulado', 'esp32'].includes(sesionSeleccionada?.modo) ? sesionSeleccionada.modo : modo);
   const registrosModo = useMemo(
-    () => panel.mediciones.filter((dato) => dato.fuente === modoDatos || (!dato.fuente && modoDatos === 'esp32')),
+    () => panel.mediciones.filter((dato) => (dato.tipo_fuente || dato.fuente || dato.modo || 'esp32') === modoDatos),
     [panel.mediciones, modoDatos]
   );
   const sesiones = panel.sesiones || [];
   const registrosSesion = useMemo(() => {
-    if (sesionId === 'sin-sesion') return registrosModo.filter((dato) => !dato.sesion_id);
+    if (sesionId === 'sin-sesion') return lecturasHistoricas;
     return sesionSeleccionada?.id
-      ? registrosModo.filter((dato) => dato.sesion_id === sesionSeleccionada.id)
+      ? (sesionSeleccionada.id !== activa?.id ? lecturasHistoricas : registrosModo.filter((dato) => dato.sesion_id === sesionSeleccionada.id))
       : [];
-  }, [registrosModo, sesionSeleccionada, sesionId]);
+  }, [registrosModo, sesionSeleccionada, sesionId, activa?.id, lecturasHistoricas]);
   const medicionesSensor = useMemo(
     () => registrosSesion.filter((dato) => Number(dato.sensor_id) === Number(sensorId)),
     [registrosSesion, sensorId]
@@ -101,7 +140,7 @@ function App() {
     : apiEstado === 'cargando' ? 'Conectando…'
       : apiEstado === 'desconocido' ? 'Sin confirmar' : 'Desconectado';
   const datosRecientes = panel.mediciones.some((dato) =>
-    (dato.fuente === modo || (!dato.fuente && modo === 'esp32')) && reciente(dato)
+    (dato.tipo_fuente || dato.fuente || dato.modo || 'esp32') === modo && reciente(dato)
   );
   const lecturasPrueba = activa
     ? panel.mediciones.filter((dato) => dato.sesion_id === activa.id).length
@@ -124,9 +163,29 @@ function App() {
   async function iniciarPrueba(tipo) {
     await ejecutarAccion(async () => {
       if (activa) throw new Error('Cierra la sesión activa antes de iniciar otra prueba.');
-      if (modo !== 'esp32') await cambiarModo('esp32');
-      await iniciarSesion(tipo);
+      if (!sujetoId) throw new Error('Selecciona un sujeto antes de iniciar.');
+      await iniciarSesion({ prueba: tipo, sujeto_id: sujetoId });
     });
+  }
+
+  async function registrarSujeto(event) {
+    event.preventDefault();
+    const edad = Number(edadNueva);
+    if (!Number.isInteger(edad) || edad < 0 || edad > 120) {
+      setError('La edad debe ser un número entero entre 0 y 120.');
+      return;
+    }
+    await ejecutarAccion(async () => {
+      const respuesta = await crearSujeto(edad);
+      setPanel((actual) => ({ ...actual, sujetos: [respuesta.sujeto, ...(actual.sujetos || [])] }));
+      setSujetoId(respuesta.sujeto.sujeto_id);
+      setEdadNueva('');
+    });
+  }
+
+  function verSesion(sesion) {
+    setSesionId(sesion.id);
+    setVista('visualizacion');
   }
 
   function irA(destino) { setVista(destino); }
@@ -172,34 +231,38 @@ function App() {
 
     {vista === 'visualizacion' && <main className="page-content">
       <div className="page-heading"><p className="eyebrow">Modo {modoDatos} · {registrosSesion.length} registros</p><h2>Visualización</h2><p>Gráficas, mediciones y tabla consumen el mismo conjunto filtrado por modo y sesión.</p></div>
-      <section className="panel chart-controls"><label htmlFor="sensor-select">Sensor</label><select id="sensor-select" value={sensorId} onChange={(event) => setSensorId(event.target.value)}><option value="1">MPU6050 1</option><option value="2">MPU6050 2</option></select><label htmlFor="session-select">Sesión</label><SessionSelect id="session-select" sesiones={sesiones} value={sesionId} onChange={setSesionId} activa={activa} haySinSesion={registrosModo.some((dato) => !dato.sesion_id)} /><span>{medicionesSensor.length} lecturas</span></section>
+      {sesionId !== 'actual' && <section className="historical-banner"><strong>Consulta histórica</strong><span>{sesionId === 'sin-sesion' ? `Registros antiguos sin sesión · ${lecturasHistoricas.length} lecturas` : `${sesionSeleccionada?.sujeto_id || 'Sujeto antiguo'} · Sesión ${sesionId} · ${sesionSeleccionada?.estado || 'estado desconocido'}`}</span><button className="secondary-button" onClick={() => setSesionId('actual')}>Regresar a prueba actual</button></section>}
+      {cargandoHistorico && <p role="status">Recuperando todas las lecturas de la sesión desde Firebase…</p>}      <section className="panel chart-controls"><label htmlFor="sensor-select">Sensor</label><select id="sensor-select" value={sensorId} onChange={(event) => setSensorId(event.target.value)}><option value="1">MPU6050 1</option><option value="2">MPU6050 2</option></select><label htmlFor="session-select">Sesión</label><SessionSelect id="session-select" sesiones={sesiones} value={sesionId} onChange={setSesionId} activa={activa} haySinSesion={true} /><span>{medicionesSensor.length} lecturas</span></section>
       <section className="chart-grid"><GraficaLecturas mediciones={medicionesSensor} tipo="aceleracion" titulo={`Acelerómetro · Sensor ${sensorId}`} /><GraficaLecturas mediciones={medicionesSensor} tipo="giroscopio" titulo={`Giroscopio · Sensor ${sensorId}`} /></section>
       <ReadingsTable mediciones={medicionesSensor} sensor />
     </main>}
 
     {vista === 'estadisticas' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Modo {modoDatos} · misma sesión seleccionada</p><h2>Estadísticas</h2><p>Conteos calculados sobre los registros visibles de la sesión.</p></div>
-      <section className="panel chart-controls"><label htmlFor="stats-session">Sesión</label><SessionSelect id="stats-session" sesiones={sesiones} value={sesionId} onChange={setSesionId} activa={activa} haySinSesion={registrosModo.some((dato) => !dato.sesion_id)} /></section>
+      <section className="panel chart-controls"><label htmlFor="stats-session">Sesión</label><SessionSelect id="stats-session" sesiones={sesiones} value={sesionId} onChange={setSesionId} activa={activa} haySinSesion={true} />{sesionId !== 'actual' && <button className="secondary-button" onClick={() => setSesionId('actual')}>Regresar a prueba actual</button>}</section>
       <section className="metrics stat-cards"><div><span>Total de lecturas</span><strong>{registrosSesion.length}</strong></div><div><span>MPU6050 1</span><strong>{registrosSesion.filter((m) => Number(m.sensor_id) === 1).length}</strong></div><div><span>MPU6050 2</span><strong>{registrosSesion.filter((m) => Number(m.sensor_id) === 2).length}</strong></div><div><span>Última lectura</span><strong className="metric-time">{registrosSesion[0] ? horaDe(registrosSesion[0]) : 'Sin datos'}</strong></div></section>
       <section className="chart-grid"><GraficaLecturas mediciones={registrosSesion.filter((m) => Number(m.sensor_id) === 1)} tipo="aceleracion" titulo="Acelerómetro · Sensor 1" /><GraficaLecturas mediciones={registrosSesion.filter((m) => Number(m.sensor_id) === 2)} tipo="aceleracion" titulo="Acelerómetro · Sensor 2" /></section></main>}
 
     {vista === 'resultados' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Modo {modoDatos} · registros conservados en Firebase</p><h2>Resultados</h2><p>El historial conserva las mediciones de cada sesión.</p></div>
-      <section className="panel chart-controls"><label htmlFor="results-session">Sesión</label><SessionSelect id="results-session" sesiones={sesiones} value={sesionId} onChange={setSesionId} activa={activa} haySinSesion={registrosModo.some((dato) => !dato.sesion_id)} /></section>
+      <section className="panel chart-controls"><label htmlFor="results-session">Sesión</label><SessionSelect id="results-session" sesiones={sesiones} value={sesionId} onChange={setSesionId} activa={activa} haySinSesion={true} />{sesionId !== 'actual' && <button className="secondary-button" onClick={() => setSesionId('actual')}>Regresar a prueba actual</button>}</section>
       <ReadingsTable mediciones={registrosSesion} /></main>}
 
     {vista === 'recoleccion' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Fuente de datos centralizada</p><h2>Recolección</h2><p>El backend acepta solo lecturas de la fuente activa y las vincula a la sesión abierta.</p></div>
-      <section className="panel collection-controls"><div className="panel-header"><h3>Modo de operación</h3><span className="badge">{modo === 'simulado' ? 'Datos ficticios' : 'Sensores físicos'}</span></div>
+      <section className="panel collection-controls"><div className="panel-header"><h3>Fuente de datos</h3><span className="badge">{modo === 'simulado' ? 'Simulador' : 'ESP32 real'}</span></div>
         <label htmlFor="mode-select">Fuente de lecturas</label><select id="mode-select" value={modo} disabled={accionando || Boolean(activa)} onChange={(event) => ejecutarAccion(() => cambiarModo(event.target.value))}><option value="esp32">ESP32 real</option><option value="simulado">Simulación</option></select>
-        <p>{modo === 'simulado' ? 'Inicia el simulador del backend después de abrir una sesión.' : 'El ESP32 debe enviar lecturas al backend por Wi-Fi.'}</p>
-        <div className="session-actions">{activa ? <><p>Sesión <code>{activa.id}</code> · iniciada {new Date(activa.inicio).toLocaleString()}</p><button className="secondary-button" disabled={accionando} onClick={() => ejecutarAccion(cerrarSesion)}>Cerrar sesión</button></> : <><p>No hay sesión activa. Las nuevas lecturas se rechazan hasta iniciarla.</p><button className="primary-button" disabled={accionando || apiEstado !== 'conectado'} onClick={() => ejecutarAccion(iniciarSesion)}>Iniciar sesión</button></>}</div>
+        <p>{modo === 'simulado' ? 'Inicia el simulador después de comenzar una prueba.' : 'El ESP32 debe enviar lecturas por Wi-Fi después de comenzar una prueba.'}</p>
+        <div className="session-actions">{activa ? <><p>Sujeto <code>{activa.sujeto_id}</code> · sesión <code>{activa.id}</code> · {activa.edad} años · {activa.modo === 'con_tea' ? 'Con TEA' : 'Sin TEA'} · fuente {activa.tipo_fuente || modo} · estado: {activa.estado}</p>{activa.estado === 'pausada' ? <button className="secondary-button" disabled={accionando} onClick={() => ejecutarAccion(reanudarSesion)}>Reanudar</button> : <button className="secondary-button" disabled={accionando} onClick={() => ejecutarAccion(pausarSesion)}>Pausar</button>}<button className="secondary-button" disabled={accionando} onClick={() => ejecutarAccion(cerrarSesion)}>Finalizar sesión</button></> : <p>No hay prueba activa. El registro del sujeto y el inicio se realizan dentro de Pacientes promedio o Pacientes con TEA.</p>}</div>
         <p className="connection-message">API/Firebase: {estadoTexto} · Fuente: {datosRecientes ? 'recibiendo datos' : 'sin lecturas recientes'}</p>{error && <p role="alert" className="connection-message">{error}</p>}
       </section>
-      <section className="panel readings-table"><div className="panel-header"><h3>Historial de sesiones</h3><span className="badge">No se borra al cerrar</span></div>{sesiones.length ? <ul className="list-block compact">{sesiones.map((s) => <li key={s.id}><div><strong>{s.id}</strong><span>{s.modo === 'simulado' ? 'Simulación' : 'ESP32 real'}</span></div><small>{new Date(s.inicio).toLocaleString()} – {s.fin ? new Date(s.fin).toLocaleString() : 'En curso'}</small><span className="tag subtle">{s.estado}</span></li>)}</ul> : <p className="empty-state">Aún no hay sesiones.</p>}</section>
+      <section className="panel readings-table"><div className="panel-header"><h3>Historial de sesiones</h3><span className="badge">Firebase · sesiones separadas por sujeto</span></div>
+        <div className="chart-controls"><label htmlFor="history-subject-session">Sesión</label><SessionSelect id="history-subject-session" sesiones={sesiones} value={sesionId} onChange={setSesionId} activa={activa} haySinSesion={true} /><button className="secondary-button" disabled={!sesionSeleccionada || sesionId === 'actual'} onClick={() => verSesion(sesionSeleccionada)}>Consultar gráficas y lecturas</button></div>
+        {sesiones.length ? <ul className="list-block compact">{sesiones.map((s) => <li key={s.id}><div><strong>{s.sujeto_id || 'Sin sujeto'}</strong><span>{s.id} · {s.edad ?? '—'} años · {s.modo === 'con_tea' ? 'Con TEA' : s.modo === 'sin_tea' ? 'Sin TEA' : 'Sesión anterior'}</span><span>Fuente: {s.tipo_fuente || (['simulado', 'esp32'].includes(s.modo) ? s.modo : 'esp32')}</span></div><small>{new Date(s.inicio || s.fecha).toLocaleString()}</small><button className="text-button" onClick={() => verSesion(s)}>Ver sesión</button><span className="tag subtle">{s.estado}</span></li>)}</ul> : <p className="empty-state">Aún no hay sesiones.</p>}
+      </section>
     </main>}
 
     {vista === 'configuracion' && <main className="page-content"><div className="page-heading"><p className="eyebrow">Conexión</p><h2>Configuración</h2><p>La red Wi-Fi del ESP32 y Firebase se configuran en el backend y el firmware.</p></div><section className="panel config-list"><div><strong>Snapshot compartido</strong><code>GET /api/panel</code></div><div><strong>Cambio de modo</strong><code>PUT /api/modo</code></div><div><strong>Sesiones</strong><code>POST /api/sesiones · POST /api/sesiones/cerrar</code></div><div><strong>Proxy</strong><code>{import.meta.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:5000'}</code></div><div><strong>Base de datos</strong><code>Firebase Realtime Database</code></div></section></main>}
 
-    {vista === 'promedio' && <VideoPage tipo="promedio" sesion={activa} lecturas={lecturasPrueba} modo={modo} apiEstado={apiEstado} accionando={accionando} error={error} onIniciar={iniciarPrueba} />}
-    {vista === 'tea' && <VideoPage tipo="tea" sesion={activa} lecturas={lecturasPrueba} modo={modo} apiEstado={apiEstado} accionando={accionando} error={error} onIniciar={iniciarPrueba} />}
+    {vista === 'promedio' && <VideoPage tipo="promedio" sesion={activa} lecturas={lecturasPrueba} modo={modo} apiEstado={apiEstado} accionando={accionando} error={error} onIniciar={iniciarPrueba} sujetos={panel.sujetos || []} sujetoId={sujetoId} onSujetoChange={setSujetoId} edadNueva={edadNueva} onEdadChange={setEdadNueva} onCrearSujeto={registrarSujeto} />}
+    {vista === 'tea' && <VideoPage tipo="tea" sesion={activa} lecturas={lecturasPrueba} modo={modo} apiEstado={apiEstado} accionando={accionando} error={error} onIniciar={iniciarPrueba} sujetos={panel.sujetos || []} sujetoId={sujetoId} onSujetoChange={setSujetoId} edadNueva={edadNueva} onEdadChange={setEdadNueva} onCrearSujeto={registrarSujeto} />}
 
     <footer className="app-footer">Ingenismus · MPU6050 · Fuente: {modo === 'simulado' ? 'simulación' : 'ESP32 real'} · Firebase</footer>
   </div>;
@@ -213,7 +276,7 @@ function SessionSelect({ id, sesiones, value, onChange, activa, haySinSesion }) 
   return <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
     <option value="actual">{activa ? 'Sesión activa' : 'Sin sesión activa'}</option>
     {haySinSesion && <option value="sin-sesion">Histórico sin sesión (sin asignar)</option>}
-    {sesiones.map((sesion) => <option key={sesion.id} value={sesion.id}>{sesion.modo === 'simulado' ? 'Simulación' : 'ESP32'} · {new Date(sesion.inicio).toLocaleString()} · {sesion.estado}</option>)}
+    {sesiones.map((sesion) => <option key={sesion.id} value={sesion.id}>{sesion.sujeto_id || 'Sin sujeto'} · {sesion.modo === 'con_tea' ? 'Con TEA' : sesion.modo === 'sin_tea' ? 'Sin TEA' : 'Modo antiguo'} · {sesion.tipo_fuente || (['esp32', 'simulado'].includes(sesion.modo) ? sesion.modo : 'esp32')} · {new Date(sesion.inicio).toLocaleString()} · {sesion.estado}</option>)}
   </select>;
 }
 

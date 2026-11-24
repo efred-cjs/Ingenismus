@@ -27,10 +27,34 @@ export function cambiarModo(modo) {
 export function iniciarSesion(prueba) {
   return solicitar('/sesiones', {
     method: 'POST',
-    body: JSON.stringify(prueba ? { prueba } : {})
+    body: JSON.stringify(prueba)
   });
 }
 
 export function cerrarSesion() {
   return solicitar('/sesiones/cerrar', { method: 'POST' });
+}
+
+export function pausarSesion() {
+  return solicitar('/sesiones/pausar', { method: 'POST' });
+}
+
+export function reanudarSesion() {
+  return solicitar('/sesiones/reanudar', { method: 'POST' });
+}
+
+export function crearSujeto(edad) {
+  return solicitar('/sujetos', { method: 'POST', body: JSON.stringify({ edad }) });
+}
+
+export async function obtenerMedicionesSesion(sesionId, { cursor, limite = 500 } = {}) {
+  const parametros = new URLSearchParams({ limite: String(limite) });
+  if (cursor) parametros.set('cursor', cursor);
+  return solicitar(`/sesiones/${encodeURIComponent(sesionId)}/mediciones?${parametros}`);
+}
+
+export async function obtenerMedicionesSinSesion({ cursor, limite = 500 } = {}) {
+  const parametros = new URLSearchParams({ limite: String(limite) });
+  if (cursor) parametros.set('cursor', cursor);
+  return solicitar(`/mediciones/sin-sesion?${parametros}`);
 }

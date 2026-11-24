@@ -54,3 +54,13 @@ Para hardware real, configura `WIFI_SSID`, `WIFI_PASSWORD` y `API_URL` en `firmw
 - `GET /mediciones?limite=N`: compatibilidad para consultar lecturas.
 
 Consulta [DOCUMENTACION_TECNICA_INGENISMUS.txt](DOCUMENTACION_TECNICA_INGENISMUS.txt) para el contrato, estructura y estado de validación.
+
+## Sujetos e historial por sesion
+
+En **Prueba > Pacientes promedio** o **Pacientes con TEA**, selecciona un sujeto existente o registralo con su edad y pulsa iniciar en esa misma vista. El tipo de prueba lo determina la vista. La fecha y el identificador se generan en el backend. En **Recoleccion** se selecciona la fuente (ESP32/simulacion) y se controla una sesion ya iniciada: pausar, reanudar o finalizar. Cada lectura recibe `sujeto_id`, `sesion_id` y `tipo_fuente` en el servidor.
+
+El nodo existente `/mediciones` se conserva. Se agregan `/sujetos/<sujeto_id>` y campos de asociacion a `/sesiones/<sesion_id>`; no se duplican las lecturas en subnodos. El historial consulta todas las lecturas de una sesion en paginas de hasta 500 registros y las carga en las graficas existentes.
+
+La consulta historica usa `orderByChild("sesion_id")`. En Firebase Console > Realtime Database > Rules, integra `".indexOn": ["sesion_id"]` dentro de la regla existente para `/mediciones`. Conserva tus reglas actuales de lectura y escritura; no reemplaces el archivo completo con una regla abierta. El backend usa Firebase Admin y la cuenta de servicio; no se agregan credenciales al navegador.
+
+Endpoints adicionales: `GET/POST /sujetos`, `POST /sesiones/pausar`, `POST /sesiones/reanudar` y `GET /sesiones/<id>/mediciones?limite=500&cursor=<push-id>`.
